@@ -47,7 +47,7 @@ antes de considerá-los prontos para integração.
 | T01 | Verificar integração disponível no OpenCode e definir contrato técnico mínimo | T00 | integrada |
 | T02 | Configuração de projeto e estrutura de execução genérica | T01 | integrada |
 | T04A | Busca web, leitura de HTML e inspeção SEO | T02 | em revisão |
-| T04N | Navegação, jornadas observadas e comparação por tela | T04A | pendente |
+| T04N | Navegação, jornadas observadas e comparação por tela | T04A | em revisão |
 | T03 | Fluxo manual completo com fontes simuladas, histórico e revisão | T04A | pendente |
 | T04B | Integrar coleta e geração de outlines pelo OpenCode | T03 | pendente |
 | T05 | Monitoramento diário, comparação e avisos | T04B | pendente |
@@ -93,11 +93,12 @@ Verificação: suíte isolada e smoke real da busca e leitura, separados.
 
 ### T04N — Navegação e jornadas
 
-Implementar o aceite de [NAVEGACAO-CONCORRENTES.md](NAVEGACAO-CONCORRENTES.md):
-leitura dinâmica, ações observadas, verificação do resultado e comparação por
-tela em contextos isolados. Jev/Donut são candidatos, não integrações prontas.
+Executado manualmente por `crawl` conforme
+[NAVEGACAO-CONCORRENTES.md](NAVEGACAO-CONCORRENTES.md): busca, leitura dinâmica,
+cliques em links visíveis, verificação de destino e comparação desktop/mobile.
+Jev/Donut são candidatos, não integrações prontas. O agendamento segue em T05.
 Verificação: fixture local com JS e fluxo reproduzível, evidências de desktop e
-mobile e teste real do controlador escolhido.
+mobile e smoke real com o Chromium local.
 
 ### T03 — Fluxo manual com evidências controladas
 
@@ -198,8 +199,21 @@ para `dev-ai`; revisão cruzada pendente:
 - Smoke tests técnicos, sem pesquisa do piloto comercial, execução de LLM ou
   publicação. O serviço SearXNG ficou disponível em `127.0.0.1:8080`.
 
-Próxima tarefa: T04N, navegação e jornadas. A coleta atual ainda não é o fluxo
-completo por projeto: histórico de evidências, análise por LLM, outlines,
-revisão editorial e agendamento permanecem pendentes.
+T04N — verificada localmente em 13/10/2026, no PR #6; revisão cruzada pendente:
+
+- Suíte completa: 48 testes passaram, incluindo fixture local com conteúdo
+  dinâmico, clique e validação do link interno, bloqueio de POST e origem externa.
+- Smoke real da busca e do Chromium em `opencode.ai`: a busca encontrou páginas,
+  o crawler abriu o resultado e clicou em “Docs” no desktop para chegar a
+  `/v2/docs`. O menu móvel não expôs esse link, então a navegação mobile foi
+  marcada como falha e a página como parcial, sem declarar jornada mobile.
+- A renderização usa apenas links visíveis do DOM hidratado quando o Chromium
+  funciona; evita seguir hrefs obsoletos do HTML inicial. Se a renderização falha,
+  mantém os links estáticos como fallback e mostra estado parcial.
+- Não acessa sessões, analytics ou histórias reais de usuários. T05 ainda cobre
+  execução diária; fluxo por projeto, análise por LLM e outlines continuam pendentes.
+
+Próxima tarefa: T03, fluxo manual com evidências controladas. T04N permanece em
+revisão até a aprovação cruzada do ZCode.
 
 Signed-by: ai-codex (GPT-6 Astra Ultra)

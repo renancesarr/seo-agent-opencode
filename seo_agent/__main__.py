@@ -91,6 +91,13 @@ def main():
     search.add_argument('--limit', type=int, default=5)
     inspect = commands.add_parser('inspect', help='Ler conteúdo e sinais SEO de uma URL pública.')
     inspect.add_argument('--url', required=True)
+    crawl = commands.add_parser('crawl', help='Buscar, percorrer páginas públicas e comparar viewports.')
+    crawl.add_argument('--query', required=True)
+    crawl.add_argument('--endpoint', default='http://127.0.0.1:8080')
+    crawl.add_argument('--language', default='pt-BR')
+    crawl.add_argument('--limit', type=int, default=5)
+    crawl.add_argument('--max-pages', type=int, default=6)
+    crawl.add_argument('--evidence-dir', type=Path, default=Path('data/browser-evidence'))
     args = parser.parse_args()
     try:
         if args.command == 'search':
@@ -99,12 +106,17 @@ def main():
         elif args.command == 'inspect':
             from seo_agent.web import inspect_page
             result = inspect_page(args.url)
+        elif args.command == 'crawl':
+            from seo_agent.web import crawl_web
+            result = crawl_web(args.query, endpoint=args.endpoint, language=args.language,
+                               limit=args.limit, max_pages=args.max_pages,
+                               evidence_dir=args.evidence_dir)
         elif args.command == 'history':
             result = history(args.project_id, args.store)
         else:
             project = validate_project(json.loads(args.project.read_text(encoding='utf-8')))
             result = {'project': project} if args.command == 'validate' else prepare_run(project, args.store)
-    except (OSError, ValueError, sqlite3.Error) as error:
+    except (OSError, ValueError, RuntimeError, sqlite3.Error) as error:
         parser.error(str(error))
     print(json.dumps(result, ensure_ascii=False))
 

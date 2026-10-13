@@ -151,6 +151,9 @@ class ProjectCLI(unittest.TestCase):
             (['search', '--query', ' '], 'consulta'),
             (['search', '--query', 'OpenCode', '--limit', '0'], 'limite'),
             (['inspect', '--url', 'file:///etc/passwd'], 'http'),
+            (['crawl', '--query', ' '], 'consulta'),
+            (['crawl', '--query', 'horta', '--limit', '99'], '20'),
+            (['crawl', '--query', 'horta', '--max-pages', '0'], '20'),
         ]:
             with self.subTest(args=args):
                 result = self.invoke(*args)
