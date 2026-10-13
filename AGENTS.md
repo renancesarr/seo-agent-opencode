@@ -107,6 +107,24 @@ Exemplos:
 - [ ] Verificação explícita do resultado: comando/teste executado e reportado (Goal-Driven)
 - [ ] Documentação atualizada quando o comportamento muda
 
+## Automação do review cruzado (event-driven)
+
+O review é disparado automaticamente por um observador local (polling de 2 min,
+indistinguível de webhook na prática para este fim):
+
+- **`scripts/pr-watcher.sh`** (systemd user timer `seo-pr-watcher.timer`): quando um
+  PR da `zcode-ai` para `dev-ai` não tem review do bot posterior ao último push,
+  executa `codex exec` headless como `ai-codex` (com `GH_TOKEN` do `Fencing3422`),
+  que publica o veredito e, se aprovar, faz o merge. PR da `codex-ai` notifica o
+  humano (a automação do ZCode cobre o review desse lado).
+- **Automação do ZCode** (cron do workspace, a cada 15 min): revisa PRs da
+  `codex-ai` pendentes como `ai-zcode` e publica o veredito assinado.
+- Estado e logs: `~/.local/state/pr-watcher/` (`watcher.log`, `codex-pr<N>-*.log`).
+- Máximo de 3 tentativas automáticas por push; depois, notifica o humano.
+- Comandos úteis: `systemctl --user list-timers seo-pr-watcher.timer`,
+  `journalctl --user -u seo-pr-watcher.service` e rodar `./scripts/pr-watcher.sh`
+  manualmente para uma passada imediata.
+
 ## Enforcement
 
 - Hook `pre-commit`: bloqueia agente em `main` e commit não-merge em `dev-ai`.
