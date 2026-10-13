@@ -22,14 +22,15 @@ fi
 
 if [ "$GIT_HUMAN" != "1" ]; then
   name=$(git config user.name)
-  if [ "$branch" = "zcode-ai" ] && [ "$name" != "ai-zcode" ]; then
+  email=$(git config user.email)
+  if [ "$branch" = "zcode-ai" ] && { [ "$name" != "ai-zcode" ] || [ "$email" != "ai-zcode@users.noreply.github.com" ]; }; then
     echo "ERRO: commits na zcode-ai devem ser assinados como ai-zcode:"
     echo "  git -c user.name=ai-zcode -c user.email=ai-zcode@users.noreply.github.com commit ..."
     exit 1
   fi
-  if [ "$branch" = "codex-ai" ] && [ "$name" != "ai-codex" ]; then
+  if [ "$branch" = "codex-ai" ] && { [ "$name" != "ai-codex" ] || [ "$email" != "261107596+Fencing3422@users.noreply.github.com" ]; }; then
     echo "ERRO: commits na codex-ai devem ser assinados como ai-codex:"
-    echo "  git -c user.name=ai-codex -c user.email=ai-codex@users.noreply.github.com commit ..."
+    echo "  git -c user.name=ai-codex -c user.email=261107596+Fencing3422@users.noreply.github.com commit ..."
     exit 1
   fi
 fi

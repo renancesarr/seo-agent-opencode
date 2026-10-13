@@ -12,7 +12,7 @@ pela própria conta GitHub:
 | Agente | Identidade git (commits) | Assinatura | Conta GitHub / transporte |
 |---|---|---|---|
 | ZCode | `-c user.name=ai-zcode -c user.email=ai-zcode@users.noreply.github.com` | `Signed-by: ai-zcode (GLM-5.3)` | `origin` (conta `renancesarr`, chave padrão) |
-| Codex | `-c user.name=ai-codex -c user.email=ai-codex@users.noreply.github.com` | `Signed-by: ai-codex (GPT-6 Astra Ultra)` | conta bot `ai-codex`, via `origin-codex` (chave `~/.ssh/id_ed25519_ai_codex`; `branch.codex-ai.pushRemote` já configurado) |
+| Codex | `-c user.name=ai-codex -c user.email=261107596+Fencing3422@users.noreply.github.com` | `Signed-by: ai-codex (GPT-6 Astra Ultra)` | conta bot `Fencing3422`, via `origin-codex` (chave `~/.ssh/id_ed25519_ai_codex`; `branch.codex-ai.pushRemote` já configurado) |
 
 O hook `pre-commit` **exige** a identidade correta na branch correspondente.
 Empurre sempre com `git push` (sem nomear o remote): o git já roteia cada branch
