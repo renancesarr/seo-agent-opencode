@@ -19,6 +19,16 @@ Empurre sempre com `git push` (sem nomear o remote): o git já roteia cada branc
 para a conta certa. A separação de contas é o que permite ao GitHub **exigir 1
 aprovação** em `dev-ai` — o autor do PR nunca é quem aprova.
 
+**Conta do `gh` CLI**: a conta ativa é `renancesarr` (identidade do ZCode).
+O Codex roda comandos `gh` como a conta bot **sem trocar a conta ativa**:
+
+```bash
+GH_TOKEN="$(gh auth token --user Fencing3422)" gh <comando>
+```
+
+Nunca use `gh auth switch` durante tarefas: cada agente opera com sua conta
+via `GH_TOKEN`, e a ativa permanece `renancesarr`.
+
 ## Modelo de branches e review
 
 | Branch | Papel | Quem escreve |
@@ -45,13 +55,17 @@ O número do PR é o identificador do review (substituiu as antigas branches `co
      --body-file .github/PULL_REQUEST_TEMPLATE.md
    ```
    (Codex usa `[ai-codex]`; complete o corpo do template com o que fez e como verificou.)
-4. **Review cruzado — quem codou não revisa.** O agente oposto revisa o PR:
+4. **Review cruzado — quem codou não revisa.** O agente oposto revisa o PR
+   (Codex revisa via conta bot; ZCode revisa com a conta ativa `renancesarr`):
    ```bash
-   gh pr diff <n>            # ler a mudança
-   gh pr review <n> --request-changes --body "problemas encontrados... Signed-by: ..."
-   gh pr review <n> --approve --body "LGTM. Signed-by: ai-codex (GPT-6 Astra Ultra)"
+   # ler a mudança
+   GH_TOKEN="$(gh auth token --user Fencing3422)" gh pr diff <n>
+   # reprovar (problemas concretos e acionáveis)
+   GH_TOKEN="$(gh auth token --user Fencing3422)" gh pr review <n> --request-changes --body "problemas... Signed-by: ai-codex (GPT-6 Astra Ultra)"
+   # aprovar
+   GH_TOKEN="$(gh auth token --user Fencing3422)" gh pr review <n> --approve --body "LGTM. Signed-by: ai-codex (GPT-6 Astra Ultra)"
    ```
-   Use o checklist do template; register reprovações concretas e acionáveis.
+   Use o checklist do template; registre reprovações concretas e acionáveis.
 5. **Aprovado → merge** (o revisor executa):
    `gh pr merge <n> --merge`
    Reprovado → o autor corrige na sua branch, push, e o PR reentra para novo review.
