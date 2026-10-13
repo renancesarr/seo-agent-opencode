@@ -1,15 +1,16 @@
-version: '3.8'
-
 services:
   searxng:
     image: searxng/searxng:latest
-    container_name: searxng
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
-      - ./searxng:/etc/searxng
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - searxng-data:/var/cache/searxng
     environment:
-      - SEARXNG_BASE_URL=http://localhost:8080/
+      SEARXNG_SECRET: "${SEARXNG_SECRET:?Defina SEARXNG_SECRET no .env local}"
+      GRANIAN_HOST: "0.0.0.0"
+      GRANIAN_PORT: "8080"
+      FORCE_OWNERSHIP: "false"
     restart: unless-stopped
     cap_drop:
       - ALL
@@ -17,3 +18,6 @@ services:
       - CHOWN
       - SETGID
       - SETUID
+
+volumes:
+  searxng-data:

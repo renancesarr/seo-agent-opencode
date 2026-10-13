@@ -25,6 +25,8 @@ este contrato. [EXECUCAO.md](EXECUCAO.md) define a ordem de desenvolvimento.
 | D07 | Avisa sobre mudanças relevantes e falhas que precisem de intervenção. |
 | D08 | Pesquisa, oportunidades e outlines passam por aprovação humana; publicação automática fica fora desta versão. |
 | D09 | O portal de igrejas é um futuro caso de validação. A tarefa atual é desenvolver a ferramenta e seu processo. |
+| D10 | Priorizar busca web, leitura de conteúdo e inspeção dos principais sinais SEO de páginas e domínio. |
+| D11 | Evoluir para navegação por páginas, jornadas observadas e comparação por tamanho de tela; Jev e Donut são candidatos a avaliar. |
 
 ## Entrada e saída do processo
 
@@ -56,7 +58,9 @@ posição comprovada no Google, nem inventa volume de busca ou dificuldade.
 
 ## Procedimento de execução
 
-Estas são convenções operacionais propostas para implementar D01–D09.
+Estas são convenções operacionais propostas para implementar D01–D11.
+A evolução de navegação tem critérios próprios em
+[NAVEGACAO-CONCORRENTES.md](NAVEGACAO-CONCORRENTES.md).
 
 | Etapa | Ação | Condição de conclusão |
 |---|---|---|

@@ -1,4 +1,4 @@
-"""Interface de configuração do agente SEO."""
+"""Interface de projetos, busca e inspeção do agente SEO."""
 
 import argparse
 from contextlib import closing
@@ -74,7 +74,7 @@ def history(project_id, store):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Preparação de projetos SEO.')
+    parser = argparse.ArgumentParser(description='Projetos, busca web e inspeção SEO.')
     commands = parser.add_subparsers(dest='command', required=True)
     validate = commands.add_parser('validate', help='Validar configuração do projeto.')
     validate.add_argument('--project', type=Path, required=True)
@@ -84,9 +84,22 @@ def main():
     listing = commands.add_parser('history', help='Consultar execuções de um projeto.')
     listing.add_argument('--project-id', required=True)
     listing.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    search = commands.add_parser('search', help='Buscar páginas pela API JSON do SearXNG.')
+    search.add_argument('--query', required=True)
+    search.add_argument('--endpoint', default='http://127.0.0.1:8080')
+    search.add_argument('--language', default='pt-BR')
+    search.add_argument('--limit', type=int, default=5)
+    inspect = commands.add_parser('inspect', help='Ler conteúdo e sinais SEO de uma URL pública.')
+    inspect.add_argument('--url', required=True)
     args = parser.parse_args()
     try:
-        if args.command == 'history':
+        if args.command == 'search':
+            from seo_agent.web import search_web
+            result = search_web(args.query, endpoint=args.endpoint, language=args.language, limit=args.limit)
+        elif args.command == 'inspect':
+            from seo_agent.web import inspect_page
+            result = inspect_page(args.url)
+        elif args.command == 'history':
             result = history(args.project_id, args.store)
         else:
             project = validate_project(json.loads(args.project.read_text(encoding='utf-8')))

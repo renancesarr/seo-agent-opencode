@@ -1,6 +1,6 @@
-# Configuração e preparação de execuções
+# Projetos, busca web e inspeção SEO
 
-A CLI implementa T02 do [processo de desenvolvimento](EXECUCAO.md).
+A CLI implementa T02 e a coleta T04A do [processo de desenvolvimento](EXECUCAO.md).
 Execute os comandos na raiz do repositório com Python 3.11 ou superior
 (testado com 3.14.4). Usa apenas a biblioteca padrão, sem instalação de pacotes.
 
@@ -60,8 +60,65 @@ entre usuários de um serviço multiusuário.
 snapshot da configuração, `status: "prepared"` e `result: null`.
 
 O estado preparado significa que a entrada foi validada e registrada. Busca,
-leitura, análise, outline e revisão ainda serão implementados em T03–T04.
-Nenhum comando desta etapa executa pesquisa, modelo ou publicação.
+leitura e inspeção podem ser executadas separadamente com os comandos abaixo.
+O fluxo por projeto, a análise por modelo, o outline e a revisão permanecem
+pendentes. `prepare` não dispara essas etapas.
+
+## Busca e inspeção
+
+Prepare o SearXNG conforme [BUSCA-WEB.md](BUSCA-WEB.md). Depois:
+
+```bash
+python3 -m seo_agent search --query "OpenCode" --language pt-BR --limit 3
+python3 -m seo_agent inspect --url https://example.com
+```
+
+`search` aceita `--endpoint` (padrão `http://127.0.0.1:8080`) e `--limit`
+(de 1 a 20, padrão 5). A URL base da instância pode incluir um prefixo de caminho,
+mas não query, fragmento ou credenciais. O endpoint é configuração confiada ao
+operador: pode ser local; redirecionamentos são rejeitados.
+
+O JSON contém consulta, idioma, URL da API, horário de coleta, resultados com
+URL/título/snippet/mecanismos e posição observada no SearXNG. URLs repetidas,
+desconsiderando fragmento, são removidas. `unresponsive_engines` conserva falhas
+informadas pelo provedor. Lista vazia não comprova ausência de concorrência.
+`--limit` limita a saída; não limita quantos mecanismos o SearXNG consulta.
+
+`inspect` faz uma auditoria de URL explícita: lê a página e consulta robots.txt
+mais um sitemap do host final. Não segue links encontrados. O relatório inclui:
+
+- `http`: URL final, status, redirecionamentos, tamanho e headers selecionados.
+- `domain`: hostname, endereços resolvidos A/AAAA e expiração do certificado TLS
+  verificado quando HTTPS; não é inventário DNS, WHOIS ou data de expiração do domínio.
+- `page`: texto, título, descrição, idioma, headings, canonical, robots,
+  hreflang, social tags, links internos/externos, imagens/alt e JSON-LD.
+- `robots`: regras recebidas, sitemaps declarados e permissão observada para
+  SEOAgent. É uma observação posterior à auditoria explícita, não aplicação de
+  política de um crawler automático. A avaliação usa urllib.robotparser e não é uma implementação completa do
+  protocolo robots. Regras indisponíveis ou padrões com * e $ ficam como
+  desconhecidos; preserve o texto para uma decisão posterior de rastreamento.
+- `sitemap`: primeiro sitemap declarado na mesma origem, ou `/sitemap.xml`;
+  distingue urlset de índice, limita saída a 500 entradas e não segue filhos.
+- `issues`: observações com evidências; ausência de metadados não é uma nota de SEO
+  e noindex pode ser intencional. JSON-LD parseado não implica validade no Schema.org.
+
+`status: partial` indica HTML não analisado ou falha em arquivos auxiliares;
+conteúdo válido já lido é preservado. HTTP 404, HTML em lugar de robots e sitemap
+inválido não se tornam evidências positivas. Um relatório parcial ainda retorna
+saída 0; o consumidor deve conferir `status` e os erros. Falha ao buscar a URL
+principal retorna saída 2. Os resultados desses comandos não são gravados no
+histórico SQLite; podem ser preservados redirecionando stdout para um arquivo.
+A integração das evidências ao histórico do projeto pertence a T03.
+
+A coleta aceita apenas HTTP/HTTPS público, valida DNS em cada redirecionamento
+e conecta ao endereço validado. Usa até cinco redirecionamentos, 2 MiB por
+resposta e timeout de 15 segundos por operação de socket. Isso não representa
+um prazo global de execução: resolução DNS e tentativas entre IPs somam tempo.
+Respostas comprimidas são recusadas quando o servidor ignora Accept-Encoding
+identity; não há execução de JavaScript ou CSS nem autenticação/cookies.
+
+Para conteúdo dinâmico, jornadas e diferenças por tela, veja a próxima etapa em
+[NAVEGACAO-CONCORRENTES.md](NAVEGACAO-CONCORRENTES.md).
 
 ## Verificação
 
@@ -71,6 +128,8 @@ python3 -B -m unittest discover -s tests -v
 
 Os testes usam a CLI em novos processos e bancos temporários. Verificam negócios
 diferentes, entrada inválida, persistência, preservação de snapshots e separação
-por projeto, sem rede ou LLM.
+por projeto. A coleta usa respostas HTTP controladas para metadados, falhas,
+redirecionamentos, endereços privados e limites; sem rede ou LLM na suíte.
+Os smoke tests reais ficam registrados em [EXECUCAO.md](EXECUCAO.md).
 
 Signed-by: ai-codex (GPT-6 Astra Ultra)

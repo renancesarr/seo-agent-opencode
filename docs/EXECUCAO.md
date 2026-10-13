@@ -5,11 +5,10 @@
 Objetivo: implementar o [contrato do MVP](SEO-AGENT-MVP.md). Cada tarefa abaixo
 entrega uma capacidade verificável da ferramenta genérica.
 
-Inspeção local de 13/10/2026: existem documentação, hooks, automação de reviews
-e Compose do SearXNG. Ainda faltam a configuração JSON do SearXNG, integração
-do produto com OpenCode, aplicação SEO e suíte de testes do produto.
-Os executáveis OpenCode, Ollama, Python, Node e Docker estão no PATH; isso
-não comprova compatibilidade, modelos disponíveis ou serviços em execução.
+Estado em 13/10/2026: T00–T02 integradas em dev-ai pelo PR #5. A CLI valida
+projetos e preserva execuções preparadas. T04A acrescenta busca real e inspeção
+SEO; sua verificação está abaixo. Integração por modelo/OpenCode, navegação
+em browser, outlines e monitoramento ainda estão pendentes.
 
 O watcher de PRs pertence ao desenvolvimento. O agendador diário do produto
 SEO é uma capacidade separada, a implementar em T05.
@@ -44,12 +43,14 @@ antes de considerá-los prontos para integração.
 
 | ID | Entrega | Depende de | Estado |
 |---|---|---|---|
-| T00 | Consolidar decisões, processo e critérios de aceite | — | em revisão |
-| T01 | Verificar integração disponível no OpenCode e definir contrato técnico mínimo | T00 | em revisão |
-| T02 | Configuração de projeto e estrutura de execução genérica | T01 | em revisão |
-| T03 | Fluxo manual completo com fontes simuladas, histórico e revisão | T02 | pendente |
-| T04 | Busca e leitura reais integradas ao mesmo fluxo pelo OpenCode | T03 | pendente |
-| T05 | Monitoramento diário, comparação e avisos | T04 | pendente |
+| T00 | Consolidar decisões, processo e critérios de aceite | — | integrada |
+| T01 | Verificar integração disponível no OpenCode e definir contrato técnico mínimo | T00 | integrada |
+| T02 | Configuração de projeto e estrutura de execução genérica | T01 | integrada |
+| T04A | Busca web, leitura de HTML e inspeção SEO | T02 | verificada localmente |
+| T04N | Navegação, jornadas observadas e comparação por tela | T04A | pendente |
+| T03 | Fluxo manual completo com fontes simuladas, histórico e revisão | T04A | pendente |
+| T04B | Integrar coleta e geração de outlines pelo OpenCode | T03 | pendente |
+| T05 | Monitoramento diário, comparação e avisos | T04B | pendente |
 | T06 | Validar o MVP completo e documentar instalação/operação | T05 | pendente |
 
 ### T00 — Contrato e processo
@@ -78,6 +79,26 @@ um projeto sem domínio é válido; entrada incompleta gera mensagem acionável;
 os resultados de um projeto não entram no histórico do outro.
 Verificação: testes isolados com entradas válidas e inválidas, sem rede ou LLM.
 
+A prioridade de busca/leitura antes dos outlines foi solicitada pelo usuário.
+T04 foi dividida em coleta T04A e integração T04B; T04N incorpora a solicitação
+posterior de navegação e comparação de jornadas, antes de ampliar a análise.
+
+### T04A — Coleta e inspeção SEO
+
+Aceite: a CLI consulta SearXNG, preserva consulta/posição observada/mecanismos,
+lê uma URL pública e extrai conteúdo, metadados, links, headings, imagens,
+JSON-LD, HTTP/TLS, robots e sitemap. Falhas ficam explícitas; não inventar score
+SEO, indexação ou métricas de ranking. Não seguir links recursivamente.
+Verificação: suíte isolada e smoke real da busca e leitura, separados.
+
+### T04N — Navegação e jornadas
+
+Implementar o aceite de [NAVEGACAO-CONCORRENTES.md](NAVEGACAO-CONCORRENTES.md):
+leitura dinâmica, ações observadas, verificação do resultado e comparação por
+tela em contextos isolados. Jev/Donut são candidatos, não integrações prontas.
+Verificação: fixture local com JS e fluxo reproduzível, evidências de desktop e
+mobile e teste real do controlador escolhido.
+
 ### T03 — Fluxo manual com evidências controladas
 
 Implementar etapas de descoberta, leitura, análise, outline, histórico e revisão
@@ -88,10 +109,11 @@ uma atualização exige nova revisão. Falha de leitura não se torna evidência
 Verificação: testes com respostas e relógio controlados, incluindo leitura
 parcial, ausência de evidências e dois projetos. A geração do LLM é simulada.
 
-### T04 — Integração real no OpenCode
+### T04B — Integração real no OpenCode
 
-Configurar busca JSON do SearXNG, leitura de páginas e modelo local usando as
-interfaces verificadas em T01. Manter a mesma entrada e saída de T03.
+Conectar a coleta T04A e modelo local usando as interfaces verificadas em T01.
+Manter a mesma entrada e saída de T03. Incorporar navegador quando T04N estiver
+verificada e a tarefa exigir interação ou conteúdo dinâmico.
 Aceite: uma invocação no OpenCode pesquisa e lê fontes, entrega outline com
 referências rastreáveis e registra indisponibilidade, sem publicar conteúdo.
 Verificação: testes de integração separados da suíte isolada; smoke test real
@@ -120,7 +142,7 @@ opcional para este teste; nenhum teste exige site próprio já publicado.
 ## Evidências e próximo passo
 
 T00–T02 estão no [PR #5](https://github.com/renancesarr/seo-agent-opencode/pull/5),
-de `codex-ai` para `dev-ai`, aguardando revisão cruzada do ZCode.
+de `codex-ai` para `dev-ai`, aprovado e integrado em `3bbe639` em 13/10/2026.
 
 T00 — verificada localmente em 13/10/2026:
 
@@ -148,11 +170,34 @@ T02 — verificada localmente em 13/10/2026:
   snapshots anteriores preservados e histórico segregado por projeto.
 - `prepare` registra somente estado `prepared` com `result: null`.
 - Revisão interna independente de código e testes: sem bloqueadores. Revisão
-  cruzada do ZCode permanece necessária para integrar o incremento.
+  cruzada do ZCode posteriormente concluída no PR #5.
 - Exemplo da CLI validado; sintaxe Python, 33 links locais da documentação e
   `git diff --check` verificados.
 
-Próxima tarefa: T03, fluxo manual com evidências controladas. Monitoramento,
-pesquisa real e geração de outlines ainda não estão implementados.
+T04A — verificada localmente em 13/10/2026, revisão cruzada pendente:
+
+- `python3 -B -m unittest discover -s tests -v`: 43 testes isolados passaram.
+  Ciclos red→green para busca, extração, transporte e comandos. A revisão interna
+  identificou `X-Robots-Tag: follow, none`/`googlebot: none`; corrigido e coberto
+  por regressão. Essa revisão não substitui o ZCode no PR.
+- `docker compose -p seo-agent-web config --quiet`: configuração válida.
+  `healthz`: HTTP 200; `/search?format=json` sem consulta: HTTP 400 com JSON,
+  conforme contrato do SearXNG.
+- Imagem observada: `2026.10.13-22c64b8d3`, digest
+  `sha256:9b61996edcc679fb6665290f95fda15389a14eda6060e41a25c63ab2758f2436`.
+- `python3 -B -m seo_agent search --query OpenCode --limit 3`: três resultados,
+  incluindo `https://opencode.ai/`. DuckDuckGo e Google CSE indicados pelo
+  agregador; indisponibilidade do Brave por excesso de requisições preservada.
+- `python3 -B -m seo_agent inspect --url https://opencode.ai/`: HTTP 200,
+  título extraído, 2.101 caracteres de texto, seis headings e 20 links;
+  robots e sitemap HTTP 200, tipo urlset, relatório `ok`.
+- `python3 -B -m seo_agent inspect --url https://example.com`: HTML e TLS
+  válidos; robots e sitemap HTTP 404, relatório `partial` sem inventar arquivos.
+- Smoke tests técnicos, sem pesquisa do piloto comercial, execução de LLM ou
+  publicação. O serviço SearXNG ficou disponível em `127.0.0.1:8080`.
+
+Próxima tarefa: T04N, navegação e jornadas. A coleta atual ainda não é o fluxo
+completo por projeto: histórico de evidências, análise por LLM, outlines,
+revisão editorial e agendamento permanecem pendentes.
 
 Signed-by: ai-codex (GPT-6 Astra Ultra)
