@@ -209,6 +209,11 @@ Para limites e significado das jornadas observadas, veja
 
 ## Verificação
 
+Os novos comandos `run`, `outline`, `review`, `notices`, `schedule-tick` e `monitor`
+estão descritos no [fluxo por projeto](FLUXO-PROJETO.md).
+`browser-experiment` tem procedimento e limites no
+[experimento Kitesurf](EXPERIMENTO-KITESURF.md).
+
 ```bash
 python3 -B -m unittest discover -s tests -v
 ```

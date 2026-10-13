@@ -41,21 +41,28 @@ def validate_project(project):
     return project
 
 
-def prepare_run(project, store):
+def prepare_run(project, store, *, status='prepared', result=None):
     record = {
         'run_id': str(uuid4()),
         'project_id': project['id'],
         'created_at': datetime.now(UTC).isoformat(),
         'project': project,
-        'status': 'prepared',
-        'result': None,
+        'status': status,
+        'result': result,
     }
+    if result and result.get('outline'):
+        result['outline'].setdefault('created_run_id', record['run_id'])
     store.parent.mkdir(parents=True, exist_ok=True)
     with closing(sqlite3.connect(store)) as database, database:
         database.execute(
             'CREATE TABLE IF NOT EXISTS runs '
             '(id TEXT PRIMARY KEY, project_id TEXT NOT NULL, record TEXT NOT NULL)'
         )
+        if result is not None:
+            from seo_agent.monitoring import add_notices
+            previous = [json.loads(row[0]) for row in database.execute(
+                'SELECT record FROM runs WHERE project_id=? ORDER BY rowid', (project['id'],))]
+            add_notices(record, previous)
         database.execute(
             'INSERT INTO runs (id, project_id, record) VALUES (?, ?, ?)',
             (record['run_id'], project['id'], json.dumps(record, ensure_ascii=False)),
@@ -68,13 +75,34 @@ def history(project_id, store):
     if not store.exists():
         return {'project_id': project_id, 'runs': []}
     with closing(sqlite3.connect(store)) as database:
+        if not database.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='runs'").fetchone():
+            return {'project_id': project_id, 'runs': []}
         rows = database.execute(
             'SELECT record FROM runs WHERE project_id = ? ORDER BY rowid', (project_id,)
         ).fetchall()
     return {'project_id': project_id, 'runs': [json.loads(row[0]) for row in rows]}
 
 
-def main():
+def execute_project(args, project, providers, fetch, wait, generate):
+    from seo_agent.workflow import collect_project
+    from seo_agent.outlines import create_outline
+    from seo_agent.monitoring import compare_evidence
+    from seo_agent.scheduler import project_lock
+    with project_lock(args.store, project['id']):
+        status, collected = collect_project(project, providers, fetch=fetch, max_pages=args.max_pages,
+                                            max_queries=args.max_queries, interval_seconds=args.interval_seconds, wait=wait)
+        if args.proposal_file:
+            def generate(project, evidence):
+                return json.loads(args.proposal_file.read_text(encoding='utf-8'))
+        if compare_evidence(project, collected, history(project['id'], args.store)['runs']):
+            create_outline(project, collected, generate)
+        if collected['errors'] and collected['sources']:
+            status = 'partial'
+        return prepare_run(project, args.store, status=status, result=collected)
+
+
+def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, model_runner=None, environment=None,
+         clock=None, worker=None):
     parser = argparse.ArgumentParser(description='Projetos, busca web e inspeção SEO.')
     commands = parser.add_subparsers(dest='command', required=True)
     validate = commands.add_parser('validate', help='Validar configuração do projeto.')
@@ -82,9 +110,39 @@ def main():
     prepare = commands.add_parser('prepare', help='Registrar uma execução preparada, sem pesquisar.')
     prepare.add_argument('--project', type=Path, required=True)
     prepare.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    run = commands.add_parser('run', help='Executar descoberta/leitura de um projeto e preservar evidências.')
+    run.add_argument('--project', type=Path, required=True)
+    run.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    run.add_argument('--env-file', type=Path, default=Path('.env'))
+    run.add_argument('--no-searxng', action='store_true')
+    run.add_argument('--endpoint', default='http://127.0.0.1:8080')
+    run.add_argument('--max-pages', type=int, default=10)
+    run.add_argument('--max-queries', type=int, default=10)
+    run.add_argument('--interval-seconds', type=int, default=300)
+    generation = run.add_mutually_exclusive_group()
+    generation.add_argument('--proposal-file', type=Path, help='Proposta JSON controlada; não executa modelo.')
+    generation.add_argument('--model', help='Gerar pelo OpenCode usando provedor/modelo.')
+    for name in ('outline', 'review'):
+        command = commands.add_parser(name, help='Consultar/revisar uma versão exata do outline.')
+        command.add_argument('--project-id', required=True)
+        command.add_argument('--version-id', required=True)
+        command.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+        if name == 'review':
+            command.add_argument('--decision', choices=['approve', 'request-changes'], required=True)
+            command.add_argument('--reason', default='')
     listing = commands.add_parser('history', help='Consultar execuções de um projeto.')
     listing.add_argument('--project-id', required=True)
     listing.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    notices = commands.add_parser('notices', help='Consultar avisos locais sem repetir fatos inalterados.')
+    notices.add_argument('--project-id', required=True)
+    notices.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    browser_experiment = commands.add_parser('browser-experiment', help='Comparar Quick Actions remotas em fixtures explícitas.')
+    browser_experiment.add_argument('--fixtures', type=Path, required=True)
+    browser_experiment.add_argument('--output', type=Path, required=True)
+    browser_experiment.add_argument('--env-file', type=Path, default=Path('.env'))
+    for name in ('schedule-tick', 'monitor'):
+        scheduled = commands.add_parser(name, help='Executar horário devido; monitor repete até Ctrl-C.')
+        scheduled.add_argument('--config', type=Path, required=True)
     search = commands.add_parser('search', help='Buscar páginas pela API JSON do SearXNG.')
     search.add_argument('--query', required=True)
     search.add_argument('--endpoint', default='http://127.0.0.1:8080')
@@ -108,9 +166,56 @@ def main():
     crawl.add_argument('--limit', type=int, default=5)
     crawl.add_argument('--max-pages', type=int, default=6)
     crawl.add_argument('--evidence-dir', type=Path, default=Path('data/browser-evidence'))
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
-        if args.command == 'search':
+        if args.command in {'schedule-tick', 'monitor'}:
+            from seo_agent.scheduler import schedule_tick
+            from time import sleep
+            if args.command == 'monitor':
+                try:
+                    while True:
+                        schedule_tick(args.config, clock=clock, worker=worker)
+                        (wait or sleep)(60)
+                except KeyboardInterrupt:
+                    result = {'status': 'stopped'}
+            else:
+                result = schedule_tick(args.config, clock=clock, worker=worker)
+        elif args.command == 'browser-experiment':
+            from seo_agent.browser_experiment import experiment
+            from seo_agent.search_providers import load_environment
+            result = experiment(json.loads(args.fixtures.read_text(encoding='utf-8')), args.output,
+                                environment if environment is not None else load_environment(args.env_file), fetch=fetch)
+        elif args.command == 'run':
+            from seo_agent.search_providers import configured_providers, SearchProvider
+            from seo_agent.web import search_web
+            project = validate_project(json.loads(args.project.read_text(encoding='utf-8')))
+            if args.model:
+                from seo_agent.opencode import OpenCodeGenerator
+                generate = OpenCodeGenerator(args.model, runner=model_runner)
+            if providers is None:
+                providers = configured_providers(env_file=args.env_file, fetch=fetch)
+                if not args.no_searxng:
+                    def searxng(query):
+                        discovery = search_web(query, endpoint=args.endpoint, language=project['language'],
+                                               limit=20, fetch=fetch)
+                        return [{'url': item['url'], 'title': item['title'],
+                                 'buscador': item['engines'] or ['searxng']} for item in discovery['results']]
+                    providers.insert(0, SearchProvider('searxng', searxng))
+            if not providers and not project.get('sources') and not project.get('competitors'):
+                raise ValueError('Nenhum provedor ou fonte indicada disponível para o projeto.')
+            result = execute_project(args, project, providers, fetch, wait, generate)
+        elif args.command in {'outline', 'review'}:
+            from seo_agent.outlines import get_outline, review_outline
+            runs = history(args.project_id, args.store)['runs']
+            if args.command == 'outline':
+                result = get_outline(args.project_id, args.version_id, args.store, runs)
+            else:
+                result = review_outline(args.project_id, args.version_id, args.decision, args.reason, args.store, runs)
+        elif args.command == 'notices':
+            result = {'project_id': args.project_id, 'notices': [notice
+                      for run in history(args.project_id, args.store)['runs']
+                      for notice in (run.get('result') or {}).get('notices', [])]}
+        elif args.command == 'search':
             from seo_agent.web import search_web
             result = search_web(args.query, endpoint=args.endpoint, language=args.language, limit=args.limit)
         elif args.command == 'search-batch':

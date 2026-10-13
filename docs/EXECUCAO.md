@@ -283,11 +283,44 @@ verificada localmente em 13/10/2026 na branch `codex-ai`, commit `fca3ee8`:
   depois disso. B01 permanece pendente no [BACKLOG.md](BACKLOG.md).
 - PR #8 aberto pela conta `Fencing3422` e integrado em `dev-ai` em 13/10/2026.
 
-Próxima tarefa: T03, fluxo manual com evidências controladas. A próxima fase
+Referência de planejamento antes desta implementação: T03, fluxo manual com
+evidências controladas. A fase
 está especificada na [issue #9](https://github.com/renancesarr/seo-agent-opencode/issues/9),
 publicada por `to-spec` com `ready-for-agent`. A divisão de T03–T06 e B01 foi
 aprovada e publicada por `to-tickets` nas issues #10–#19. Labels, assinaturas,
 vínculos à especificação e dependências nativas foram conferidos no GitHub.
 A especificação #9 permanece aberta. O experimento Kitesurf não bloqueia T03.
+
+Implementação local de #10–#16 em 13/10/2026, ainda sujeita a review cruzado:
+
+- CLI conecta coleta, histórico, outline versionado, decisões humanas e avisos.
+  Testes controlam busca, HTTP e geração; exercitam ausência de evidências,
+  referência inventada, nova fonte, mudança factual, CSS/espaços, erro parcial,
+  recuperação em novo processo e lock do mesmo projeto/store.
+- Smoke real: OpenCode 1.18.35 e Ollama 0.34.2, modelo `ollama/gemma4:e4b`,
+  URL pública de exemplo. Outline JSON validado, versão pendente de revisão.
+  Qwen 27B excedeu 300 segundos; Dolphin gerou texto/Markdown inválido. Ambos
+  preservaram falhas sem gerar falsa proposta. Configuração temporária, sem
+  ferramentas ou alteração dos modelos globais.
+- Agendamento usa o mesmo `run`, horários persistidos, limites, recuperação
+  explícita e encerramento do grupo de processos. Horários escolhidos: 8h/20h.
+  Smoke real único em configuração temporária: horário `2026-10-13T18:01:00-03:00`,
+  execução `5c007d32-d15b-48d6-bf94-24c578d7dc28`, `run_status=collected`,
+  gerador validado com Gemma. Repetição retornou `already_claimed`.
+  Monitoramento permanente não ativado; fuso/limites/retomada aguardam configuração.
+- #18 parcialmente implementado: cinco capturas por cenário/motor, HTML/SEO,
+  tempo e status separados. Baseline inicial é Chromium remoto, não equivalência
+  comprovada com o crawler local. Cloudflare sem conta/token; aceite remoto e
+  recomendação pendentes. #19 permanece bloqueado por esse aceite.
+- #17 tem instruções em [FLUXO-PROJETO.md](FLUXO-PROJETO.md), mas aceite por outro
+  operador e monitoramento permanente ainda não concluídos. Não fechar #9.
+- Verificação final: `python3 -B -m unittest discover -s tests -v`: 89 testes,
+  88 aprovados e um smoke opcional Chromium pulado por dependência ausente.
+  Sintaxe Python por AST, `bash -n .env.example` e `git diff --check` aprovados.
+  Não há typechecker configurado. Nenhuma chamada real à Cloudflare.
+
+Próximo passo operacional: configurar limites/fuso/retomada e reproduzir o aceite
+de #17; para #18, fornecer credenciais locais e hospedar fixtures controladas.
+Issues implementadas só são integradas após PR aprovado pelo agente oposto.
 
 Signed-by: ai-codex (GPT-6 Astra Ultra)

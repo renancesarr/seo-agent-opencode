@@ -51,7 +51,7 @@ class BraveSearchProvider:
         return normalized
 
 
-def _url_key(url):
+def normalize_url(url):
     parsed = urlsplit(url)
     if (parsed.scheme not in {'http', 'https'} or not parsed.hostname
             or parsed.username is not None or parsed.password is not None):
@@ -88,7 +88,7 @@ def collect_pages(queries, providers, *, fetch_page=None, on_error=None):
                 if not isinstance(url, str):
                     continue
                 try:
-                    key = _url_key(url)
+                    key = normalize_url(url)
                 except ValueError:
                     continue
                 if key in checked:
@@ -104,7 +104,7 @@ def collect_pages(queries, providers, *, fetch_page=None, on_error=None):
                 if response.status != 200:
                     continue
                 try:
-                    final_url = _url_key(response.url)
+                    final_url = normalize_url(response.url)
                 except ValueError:
                     continue
                 domain = _domain(final_url)
