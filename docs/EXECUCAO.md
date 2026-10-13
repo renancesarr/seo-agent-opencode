@@ -44,9 +44,9 @@ antes de considerá-los prontos para integração.
 
 | ID | Entrega | Depende de | Estado |
 |---|---|---|---|
-| T00 | Consolidar decisões, processo e critérios de aceite | — | verificada localmente |
-| T01 | Verificar integração disponível no OpenCode e definir contrato técnico mínimo | T00 | verificada localmente |
-| T02 | Configuração de projeto e estrutura de execução genérica | T01 | verificada localmente |
+| T00 | Consolidar decisões, processo e critérios de aceite | — | em revisão |
+| T01 | Verificar integração disponível no OpenCode e definir contrato técnico mínimo | T00 | em revisão |
+| T02 | Configuração de projeto e estrutura de execução genérica | T01 | em revisão |
 | T03 | Fluxo manual completo com fontes simuladas, histórico e revisão | T02 | pendente |
 | T04 | Busca e leitura reais integradas ao mesmo fluxo pelo OpenCode | T03 | pendente |
 | T05 | Monitoramento diário, comparação e avisos | T04 | pendente |
@@ -118,6 +118,9 @@ Verificação: registrar comandos e resultados reais. O piloto de igrejas é
 opcional para este teste; nenhum teste exige site próprio já publicado.
 
 ## Evidências e próximo passo
+
+T00–T02 estão no [PR #5](https://github.com/renancesarr/seo-agent-opencode/pull/5),
+de `codex-ai` para `dev-ai`, aguardando revisão cruzada do ZCode.
 
 T00 — verificada localmente em 13/10/2026:
 
