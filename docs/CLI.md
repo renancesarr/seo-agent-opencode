@@ -1,8 +1,9 @@
 # Projetos, busca web e inspeção SEO
 
-A CLI implementa T02 e a coleta T04A do [processo de desenvolvimento](EXECUCAO.md).
+A CLI implementa T02, coleta T04A e navegação T04N do [processo de desenvolvimento](EXECUCAO.md).
 Execute os comandos na raiz do repositório com Python 3.11 ou superior
-(testado com 3.14.4). Usa apenas a biblioteca padrão, sem instalação de pacotes.
+(testado com 3.14.4). Os comandos básicos usam a biblioteca padrão; `crawl`
+requer Playwright e Chromium, conforme as instruções abaixo.
 
 ## Comandos disponíveis
 
@@ -117,7 +118,48 @@ um prazo global de execução: resolução DNS e tentativas entre IPs somam temp
 Respostas comprimidas são recusadas quando o servidor ignora Accept-Encoding
 identity; não há execução de JavaScript ou CSS nem autenticação/cookies.
 
-Para conteúdo dinâmico, jornadas e diferenças por tela, veja a próxima etapa em
+## Execução automática de páginas e jornadas
+
+`crawl` encadeia busca, inspeção, descoberta de links e Chromium. Ele percorre
+até três páginas por host e até o total de `--max-pages`, verifica robots.txt
+antes de cada página e segue links da mesma origem. Cada destino é renderizado
+em contexto descartável desktop (1365×900) e mobile (390×844); screenshots
+são gravados sob `--evidence-dir`.
+
+Links visíveis geram passos reproduzíveis: o Chromium clica o link na origem,
+verifica se chegou à URL esperada e registra a ação. Se o link não está visível
+ou leva a outra URL, o passo fica como falha. A descoberta inclui links exibidos
+por JavaScript na renderização desktop. Botões, filtros, formulários e cadastros
+são registrados como controles, mas não são acionados.
+
+```bash
+# Dependência de navegador opcional, instalar uma vez
+python3 -m pip install -r requirements-browser.txt
+python3 -m playwright install chromium
+
+# Busca e rastreamento automáticos, com relatório e screenshots locais
+python3 -m seo_agent crawl \
+  --query "palavra-chave e contexto" \
+  --limit 5 --max-pages 6 \
+  --evidence-dir data/browser-evidence > data/crawl-latest.json
+```
+
+`--limit` limita candidatos da busca (1–20, padrão 5). `--max-pages` limita
+resultados e links percorridos somados (1–20, padrão 6). O teto de três páginas
+por host continua valendo. Os arquivos em `data/` são locais e ignorados pelo
+Git. Cada execução cria contextos sem perfil ou cookies da pessoa que executa
+a ferramenta. O navegador resolve o host para o IP público já validado pela
+coleta HTTP, aceita pedidos apenas dessa origem e bloqueia requests externos,
+WebSockets e POST. CDNs/API externas podem ficar ausentes da renderização; os
+pedidos bloqueados aparecem no resultado.
+
+Um `journey` é uma sequência de links reproduzida pelo crawler, não histórico
+real de visitantes ou analytics do concorrente. O relatório registra controles
+disponíveis sem enviar dados a formulários. `crawl` é manual; o agendamento
+diário segue pendente em T05. Resultado da coleta é evidência para análise, não
+story aprovada pelo negócio.
+
+Para limites e significado das jornadas observadas, veja
 [NAVEGACAO-CONCORRENTES.md](NAVEGACAO-CONCORRENTES.md).
 
 ## Verificação

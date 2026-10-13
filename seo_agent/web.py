@@ -176,3 +176,162 @@ def inspect_page(url, *, fetch=None):
         'domain': {'hostname': parsed.hostname, 'ip_addresses': response.ip_addresses, 'tls': response.tls},
         'page': page, 'robots': robots, 'sitemap': sitemap, 'issues': issues,
     }
+
+
+def _crawler_permission(url, fetch):
+    from urllib.robotparser import RobotFileParser
+
+    parsed = urlsplit(url)
+    origin = urlunsplit((parsed.scheme, parsed.netloc, '', '', ''))
+    result, text = _resource(origin + '/robots.txt', fetch)
+    if result.get('http_status') == 404:
+        return True, result
+    if result.get('http_status') != 200 or text is None or '<html' in text.lower():
+        return False, result
+    result['text'] = text
+    if re.search(r'^\s*(?:allow|disallow)\s*:.*[*$]', text, re.IGNORECASE | re.MULTILINE):
+        result['error'] = 'Padrão robots com * ou $ não é avaliado automaticamente.'
+        return False, result
+    rules = RobotFileParser()
+    rules.set_url(origin + '/robots.txt')
+    rules.parse(text.splitlines())
+    return rules.can_fetch('SEOAgent', url), result
+
+
+def crawl_web(query, *, endpoint='http://127.0.0.1:8080', language='pt-BR', limit=5,
+              max_pages=6, evidence_dir='data/browser-evidence', fetch=None, browser=None):
+    """Busca, coleta links do mesmo host e observa-os em viewports separados."""
+    from seo_agent.browser import VIEWPORTS, browser_session
+    if not 1 <= limit <= 20 or not 1 <= max_pages <= 20:
+        raise ValueError('O limite de busca e o total de páginas devem estar entre 1 e 20.')
+    if fetch is None:
+        from seo_agent.http import fetch_url
+        fetch = fetch_url
+    cache = {}
+
+    def cached_fetch(url, **options):
+        key = url, options.get('allow_private', False)
+        if key not in cache:
+            cache[key] = fetch(url, **options)
+        return cache[key]
+
+    discovery = search_web(query, endpoint=endpoint, language=language, limit=limit,
+                           fetch=cached_fetch)
+    pages, journeys, queue, seen = [], [], [], set()
+    for item in discovery['results']:
+        queue.append((item['url'], [{'url': item['url'], 'via': 'search_result',
+                                     'label': 'Resultado da busca'}]))
+    permission_cache = {}
+
+    def can_read(url):
+        parts = urlsplit(url)
+        origin = urlunsplit((parts.scheme, parts.netloc, '', '', ''))
+        if origin not in permission_cache:
+            permission_cache[origin] = _crawler_permission(url, cached_fetch)
+        allowed, robots = permission_cache[origin]
+        if allowed and url != robots.get('checked_url'):
+            rules = RobotFileParser()
+            rules.set_url(origin + '/robots.txt')
+            rules.parse((robots.get('text') or '').splitlines())
+            allowed = rules.can_fetch('SEOAgent', url)
+        return allowed, robots
+
+    from urllib.robotparser import RobotFileParser
+    domain_counts = {}
+    browser_context = browser_session() if browser is None and queue else None
+    browser = browser_context.__enter__() if browser_context else browser
+    try:
+        while queue and len(pages) < max_pages:
+            url, path = queue.pop(0)
+            try:
+                parsed = urlsplit(url)
+                if parsed.scheme not in {'http', 'https'} or not parsed.hostname or parsed.username:
+                    continue
+                normalized = urlunsplit(parsed._replace(fragment=''))
+                if normalized in seen:
+                    continue
+                seen.add(normalized)
+                requested_host = (parsed.hostname or '').lower()
+                if domain_counts.get(requested_host, 0) >= 3:
+                    continue
+                allowed, robots = can_read(normalized)
+                if not allowed:
+                    pages.append({'url': normalized, 'status': 'skipped_robots', 'robots': robots,
+                                  'navigation_path': path, 'renderings': []})
+                    continue
+                report = inspect_page(normalized, fetch=cached_fetch)
+                final_url = report['http']['url']
+                hostname = (urlsplit(final_url).hostname or '').lower()
+                domain_counts[requested_host] = domain_counts.get(requested_host, 0) + 1
+                renderings = [browser.render(final_url, viewport, evidence_dir, locale=language,
+                                             navigation_path=path)
+                              for viewport in VIEWPORTS]
+                page = {
+                    'url': final_url, 'requested_url': normalized,
+                    'status': 'ok' if report['status'] == 'ok' and all(
+                        screen.get('status') == 'ok' for screen in renderings) else 'partial',
+                    'inspection': report,
+                    'renderings': renderings, 'navigation_path': path,
+                }
+                pages.append(page)
+                if report['page'] is None:
+                    continue
+                if renderings and renderings[0].get('status') == 'ok':
+                    observed_links = renderings[0]['links']
+                else:
+                    observed_links = report['page']['links']
+                final_parts = urlsplit(final_url)
+                page_origin = (final_parts.scheme, final_parts.hostname, final_parts.port or
+                               (443 if final_parts.scheme == 'https' else 80))
+                for link in observed_links:
+                    target = link['url']
+                    target_parts = urlsplit(target)
+                    target_origin = (target_parts.scheme, target_parts.hostname, target_parts.port or
+                                     (443 if target_parts.scheme == 'https' else 80))
+                    if (link.get('internal', True) and target_origin == page_origin and target not in seen):
+                        queue.append((target, path + [{'url': target, 'via': 'internal_link',
+                            'label': link['text'][:200] or 'Link sem texto'}]))
+            except (OSError, ValueError) as error:
+                pages.append({'url': url, 'status': 'error', 'error': str(error)[:500],
+                              'navigation_path': path, 'renderings': []})
+        for page in pages:
+            if (page.get('inspection', {}).get('page') is not None
+                    and any(screen.get('status') == 'ok' for screen in page['renderings'])):
+                journeys.append({
+                    'status': 'observed_page_sequence',
+                    'navigation_path': page['navigation_path'],
+                    'result_url': page['url'],
+                    'viewports': [rendering['viewport']['name'] for rendering in page['renderings']
+                                  if rendering.get('status') == 'ok'],
+                    'limitations': 'Não representa sessão real nem intenção confirmada de visitantes.',
+                })
+    finally:
+        if browser_context:
+            browser_context.__exit__(None, None, None)
+    for page in pages:
+        desktop = next((rendering for rendering in page.get('renderings', [])
+                        if rendering.get('viewport', {}).get('name') == 'desktop'), None)
+        mobile = next((rendering for rendering in page.get('renderings', [])
+                       if rendering.get('viewport', {}).get('name') == 'mobile'), None)
+        if desktop and mobile and desktop.get('status') == mobile.get('status') == 'ok':
+            desktop_headings = [heading['text'] for heading in desktop['headings']]
+            mobile_headings = [heading['text'] for heading in mobile['headings']]
+            desktop_links = {(link['url'], link['text']) for link in desktop['links']}
+            mobile_links = {(link['url'], link['text']) for link in mobile['links']}
+            desktop_controls = {control['label'] for control in desktop['controls'] if control['label']}
+            mobile_controls = {control['label'] for control in mobile['controls'] if control['label']}
+            page['viewport_comparison'] = {
+                'title_changed': desktop['title'] != mobile['title'],
+                'desktop_only_headings': [text for text in desktop_headings if text not in mobile_headings],
+                'mobile_only_headings': [text for text in mobile_headings if text not in desktop_headings],
+                'desktop_only_links': [{'url': url, 'text': text} for url, text in sorted(desktop_links - mobile_links)],
+                'mobile_only_links': [{'url': url, 'text': text} for url, text in sorted(mobile_links - desktop_links)],
+                'desktop_only_controls': sorted(desktop_controls - mobile_controls),
+                'mobile_only_controls': sorted(mobile_controls - desktop_controls),
+                'text_length': {'desktop': len(desktop['text']), 'mobile': len(mobile['text'])},
+                'screenshot_visual_diff_computed': False,
+            }
+    return {
+        'query': query, 'language': language, 'discovery': discovery,
+        'viewports': VIEWPORTS, 'max_pages': max_pages, 'pages': pages, 'journeys': journeys,
+    }
