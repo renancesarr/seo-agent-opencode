@@ -27,13 +27,12 @@ flock -n 9 || { echo "outra instância rodando; skip"; exit 0; }
 BOT_TOKEN="$("$GH_BIN" auth token --user Fencing3422 2>/dev/null)" || { echo "sem token do bot; skip"; exit 0; }
 cd "$REPO_DIR" || exit 0
 
-# PRs abertos para dev-ai com: último push, último review do bot e do renancesarr
+# PRs abertos para dev-ai com o SHA atual e reviews associados a esse SHA
 PRS=$("$GH_BIN" pr list --repo "$REPO" --base dev-ai --state open \
-  --json number,headRefName,commits,reviews --jq '[ .[] | {
-      number, head: .headRefName,
-      last_push: (.commits | last | .committedDate),
-      bot_review: ([.reviews[] | select(.author.login=="Fencing3422") | .submittedAt] | max),
-      me_review:  ([.reviews[] | select(.author.login=="renancesarr") | .submittedAt] | max)
+  --json number,headRefName,headRefOid,reviews --jq '[ .[] | .headRefOid as $head | {
+      number, head: .headRefName, head_oid: $head,
+      bot_review: ([.reviews[] | select(.author.login=="Fencing3422" and (.state=="APPROVED" or .state=="CHANGES_REQUESTED") and .commit.oid==$head) | .submittedAt] | max),
+      me_review:  ([.reviews[] | select(.author.login=="renancesarr" and (.state=="APPROVED" or .state=="CHANGES_REQUESTED") and .commit.oid==$head) | .submittedAt] | max)
     } ]')
 COUNT=$(echo "$PRS" | jq -s 'length')
 echo "PRs abertos para dev-ai: $COUNT"
@@ -41,7 +40,7 @@ echo "PRs abertos para dev-ai: $COUNT"
 echo "$PRS" | jq -c '.[]' | while read -r pr; do
   n=$(jq -r .number <<< "$pr")
   head=$(jq -r .head <<< "$pr")
-  last_push=$(jq -r .last_push <<< "$pr")
+  head_oid=$(jq -r .head_oid <<< "$pr")
 
   case "$head" in
     zcode-ai) reviewer=bot ;;
@@ -50,9 +49,8 @@ echo "$PRS" | jq -c '.[]' | while read -r pr; do
   esac
 
   if [ "$reviewer" = bot ]; then last=$(jq -r .bot_review <<< "$pr"); else last=$(jq -r .me_review <<< "$pr"); fi
-  [ "$last" = "null" ] && last="1970-01-01T00:00:00Z"
-  # já revisado depois do último push -> nada a fazer
-  if [[ "$last" > "$last_push" ]]; then continue; fi
+  # veredito aprovado ou rejeitado já publicado para este SHA -> nada a fazer
+  [ "$last" != "null" ] && continue
 
   # revisão em andamento (alguma unidade transitória do PR ativa)?
   if systemctl --user list-units 'seo-codex-review-'"$n"'-*' --no-legend 2>/dev/null | grep -q active; then
@@ -68,7 +66,7 @@ echo "$PRS" | jq -c '.[]' | while read -r pr; do
   # limita tentativas por push (reset quando novo push entra)
   stamp_file="$STATE/attempts-$n"
   stamp_push="$(cat "$stamp_file.push" 2>/dev/null || echo none)"
-  if [ "$stamp_push" != "$last_push" ]; then echo "$last_push" > "$stamp_file.push"; echo 0 > "$stamp_file"; fi
+  if [ "$stamp_push" != "$head_oid" ]; then echo "$head_oid" > "$stamp_file.push"; echo 0 > "$stamp_file"; fi
   attempts=$(cat "$stamp_file" 2>/dev/null || echo 0)
   if [ "$attempts" -ge 3 ]; then
     echo "PR #$n: 3 tentativas sem review publicado; aguardando humano"

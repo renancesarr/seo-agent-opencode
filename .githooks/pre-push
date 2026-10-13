@@ -11,7 +11,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$GIT_HUMAN" = "1" ] && continue
   [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
 
-  case "$local_ref" in
+  case "$remote_ref" in
     refs/heads/zcode-ai) want_n="ai-zcode"; want_e="ai-zcode@users.noreply.github.com" ;;
     refs/heads/codex-ai) want_n="ai-codex"; want_e="261107596+Fencing3422@users.noreply.github.com" ;;
     *) continue ;;
@@ -22,7 +22,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   excl=()
   while IFS= read -r r; do
     [ -n "$r" ] && excl+=("$r")
-  done < <(git for-each-ref --format='%(refname)' refs/remotes refs/heads/main refs/heads/dev-ai)
+  done < <(git for-each-ref --format='%(refname)' "refs/remotes/$remote/main" "refs/remotes/$remote/dev-ai" refs/heads/main refs/heads/dev-ai)
 
   if [ "${#excl[@]}" -gt 0 ]; then
     set -- "$local_sha" --not "${excl[@]}"
