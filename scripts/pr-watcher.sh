@@ -54,8 +54,8 @@ echo "$PRS" | jq -c '.[]' | while read -r pr; do
   # já revisado depois do último push -> nada a fazer
   if [[ "$last" > "$last_push" ]]; then continue; fi
 
-  # revisão em andamento (processo vivo)?
-  if [ -f "$STATE/inflight-$n" ] && kill -0 "$(cat "$STATE/inflight-$n")" 2>/dev/null; then
+  # revisão em andamento (alguma unidade transitória do PR ativa)?
+  if systemctl --user list-units 'seo-codex-review-'"$n"'-*' --no-legend 2>/dev/null | grep -q active; then
     echo "PR #$n ($head): revisão em andamento"; continue
   fi
 
@@ -79,9 +79,18 @@ echo "$PRS" | jq -c '.[]' | while read -r pr; do
 
   CODEX_LOG="$STATE/codex-pr$n-$(date +%s).log"
   echo "PR #$n (zcode-ai): disparando Codex (tentativa $((attempts + 1))) -> $CODEX_LOG"
-  GH_TOKEN="$BOT_TOKEN" "$CODEX_BIN" exec --full-auto \
+  # systemd-run: unidade transitória própria — sobrevive ao fim do watcher
+  # (oneshot do systemd mata o cgroup inteiro se o codex rodasse com & aqui)
+  UNIT="seo-codex-review-$n-$(date +%s)"
+  systemd-run --user --unit="$UNIT" \
+    --property=WorkingDirectory="$REPO_DIR" \
+    --property=StandardOutput=append:"$CODEX_LOG" \
+    --property=StandardError=append:"$CODEX_LOG" \
+    --property=StandardInput=null \
+    /usr/bin/env GH_TOKEN="$BOT_TOKEN" "$CODEX_BIN" exec \
+    -c sandbox_mode="workspace-write" \
     -c sandbox_workspace_write.network_access=true \
     "Revise o PR #$n do repositorio $REPO (head zcode-ai -> dev-ai). Voce e o ai-codex: siga HANDOFF-CODEX.md e AGENTS.md. Comandos gh ja operam como a conta bot via GH_TOKEN do ambiente - NAO use gh auth switch. Analise com: gh pr diff $n --repo $REPO e gh pr view $n --repo $REPO. Aplique o checklist de review do AGENTS.md. Publique o veredito: gh pr review $n --repo $REPO --approve --body '...' ou --request-changes --body '...', sempre assinando 'Signed-by: ai-codex (GPT-6 Astra Ultra)' com justificativa concreta. Se aprovar, mergeie: gh pr merge $n --repo $REPO --merge. NAO commite nem altere arquivos do repositorio." \
-    > "$CODEX_LOG" 2>&1 &
-  echo $! > "$STATE/inflight-$n"
+    && echo "unidade seo-codex-review-$n disparada" \
+    || echo "FALHA ao disparar systemd-run para PR #$n"
 done
