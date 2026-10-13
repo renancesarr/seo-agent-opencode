@@ -48,7 +48,7 @@ antes de considerá-los prontos para integração.
 | T02 | Configuração de projeto e estrutura de execução genérica | T01 | integrada |
 | T04A | Busca web, leitura de HTML e inspeção SEO | T02 | integrada |
 | T04N | Navegação, jornadas observadas e comparação por tela | T04A | integrada |
-| T04P | Busca batch com APIs selecionadas por credenciais | T04A | verificada localmente |
+| T04P | Busca batch com APIs selecionadas por credenciais | T04A | em revisão |
 | T03 | Fluxo manual completo com fontes simuladas, histórico e revisão | T04A | pendente |
 | T04B | Integrar coleta e geração de outlines pelo OpenCode | T03 | pendente |
 | T05 | Monitoramento diário, comparação e avisos | T04B | pendente |
@@ -237,7 +237,8 @@ solicitação do usuário antes de T03:
   reais no exemplo, links locais e `git diff --check` verificados.
 - Nenhuma chave externa obtida ou validada com chamada real nesta configuração.
 
-T04P — verificada localmente em 13/10/2026 na branch `codex-ai`:
+T04P — verificada localmente em 13/10/2026 na branch `codex-ai`, commit
+`fca3ee8`, em revisão no [PR #8](https://github.com/renancesarr/seo-agent-opencode/pull/8):
 
 - `python3 -B -m unittest discover -s tests -v`: 72 testes, 71 aprovados e
   um smoke opcional de Chromium pulado nesta execução por dependência ausente.
@@ -253,7 +254,8 @@ T04P — verificada localmente em 13/10/2026 na branch `codex-ai`:
 - Nenhuma consulta real às nove APIs nem execução remota Kitesurf nesta etapa.
   Chaves e elegibilidade ainda serão configuradas; registrar smoke por provedor
   depois disso. B01 permanece pendente no [BACKLOG.md](BACKLOG.md).
-- Revisão cruzada e integração em `dev-ai` ainda pendentes.
+- PR #8 aberto pela conta `Fencing3422`; revisão cruzada e integração em
+  `dev-ai` ainda pendentes.
 
 Próxima tarefa: T03, fluxo manual com evidências controladas. T04P aguarda
 revisão cruzada; o experimento Kitesurf continua no backlog B01.
