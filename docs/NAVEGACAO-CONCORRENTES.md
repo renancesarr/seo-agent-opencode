@@ -6,7 +6,8 @@ Depois de descobrir URLs, visitar páginas relevantes, extrair conteúdo e obser
 fluxos públicos em diferentes tamanhos de tela. Essa capacidade amplia a coleta
 SEO para comparar a experiência oferecida pelos concorrentes.
 
-Estado: T04N implementada localmente pela CLI `crawl`; revisão cruzada pendente.
+Estado: T04N implementada e verificada localmente na branch `codex-ai`; ainda
+aguarda PR e revisão cruzada para integrar em `dev-ai`.
 Playwright e Chromium são dependências opcionais declaradas em
 [requirements-browser.txt](../requirements-browser.txt).
 
