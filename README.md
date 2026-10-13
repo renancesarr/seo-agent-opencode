@@ -24,12 +24,14 @@ A visão completa, arquitetura e roadmap estão no [IDEIA.md](IDEIA.md).
 main (humana)  ←  dev-ai (integração)  ←  zcode-ai / codex-ai
                         ↑
               PR + review cruzado obrigatório
-        (quem codou nunca revisa; 1 aprovação exigida no GitHub)
+     (quem codou nunca revisa; aprovação cruzada exigida)
 ```
 
 - Commits assinados por agente: `ai-zcode` / `ai-codex`
 - Review acontece em **Pull Requests**, com checklist e assinatura `Signed-by`
-- Hooks locais + proteção de branch no GitHub impõem as regras
+- Hooks locais (`pre-commit`, `commit-msg`, `pre-push`) impõem as regras,
+  incluindo identidade efetiva do autor; a proteção remota no GitHub
+  (aprovação obrigatória em `dev-ai`) está em ativação
 
 As regras completas (fluxo, padrão de commit, checklist de review) estão no
 [AGENTS.md](AGENTS.md) — agents e humanos devem lê-lo antes de contribuir.

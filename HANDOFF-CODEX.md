@@ -50,8 +50,13 @@ Surgical Changes, Goal-Driven Execution) já estão nas suas instruções globai
 1. **Nunca** commita, mergeia ou reescreve `main` (branch humana).
 2. `dev-ai` só recebe **merge de PR aprovado** por você ou pelo ZCode —
    nunca commit direto.
-3. Você desenvolve **somente na `codex-ai`**; sincronize antes de cada tarefa:
-   `git checkout codex-ai && git merge origin/dev-ai`
+3. Você desenvolve **somente na `codex-ai`**; sincronize antes de cada tarefa
+   (a sua identidade assina também o merge):
+   ```bash
+   git checkout codex-ai
+   git -c user.name=ai-codex -c user.email=261107596+Fencing3422@users.noreply.github.com \
+     merge origin/dev-ai --no-edit
+   ```
 4. **Quem codou não revisa**: você revisa PRs do ZCode; o ZCode revisa os seus.
 5. Nunca `--no-verify`, nunca desativar hooks, nunca force-push em branches
    compartilhadas.
@@ -63,7 +68,7 @@ Surgical Changes, Goal-Driven Execution) já estão nas suas instruções globai
 ## 5. Fluxo de trabalho (ciclo completo)
 
 ```
-1. git checkout codex-ai && git merge origin/dev-ai     # sincroniza
+1. git checkout codex-ai && git merge origin/dev-ai (com sua identidade -c)  # sincroniza
 2. desenvolve; commits assinados                         # sua branch
 3. git push                                               # vai como Fencing3422
 4. GH_TOKEN=... gh pr create --base dev-ai --head codex-ai \

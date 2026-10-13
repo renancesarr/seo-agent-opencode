@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Backstop final: valida a identidade REAL (autor E committer dos objetos)
+# de todo commit novo empurrado para as branches de agente. Cobre qualquer
+# bypass local (--author, env, merges, hooks pulados) porque inspeciona os
+# commits que efetivamente vão para o remoto — não o ambiente.
+# Commits já presentes em qualquer branch remota (ex.: herdados de dev-ai em
+# um merge de sincronização) são isentos: já foram aceitos no remoto.
+remote="$1"
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$GIT_HUMAN" = "1" ] && continue
+  [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
+
+  case "$local_ref" in
+    refs/heads/zcode-ai) want_n="ai-zcode"; want_e="ai-zcode@users.noreply.github.com" ;;
+    refs/heads/codex-ai) want_n="ai-codex"; want_e="261107596+Fencing3422@users.noreply.github.com" ;;
+    *) continue ;;
+  esac
+
+  while IFS='|' read -r an ae cn ce; do
+    if [ "$an" != "$want_n" ] || [ "$ae" != "$want_e" ] || [ "$cn" != "$want_n" ] || [ "$ce" != "$want_e" ]; then
+      echo "ERRO (pre-push): commit com identidade incorreta indo para $local_ref:"
+      echo "  autor:     $an <$ae>"
+      echo "  committer: $cn <$ce>"
+      echo "  exigido:   $want_n <$want_e> (autor E committer)"
+      exit 1
+    fi
+  done < <(git rev-list "$local_sha" --not --remotes main dev-ai 2>/dev/null | while read -r c; do
+             git log -1 --format='%an|%ae|%cn|%ce' "$c"
+           done)
+done
+exit 0

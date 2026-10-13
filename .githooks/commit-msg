@@ -1,10 +1,47 @@
 #!/usr/bin/env bash
-# Valida o padrão de commit (ver AGENTS.md):
-#   <tipo>(<escopo>?): <descrição>
-# Merge commits são isentos (começam com "Merge").
+# Valida (1) branches protegidas também em MERGES (o pre-commit não roda em
+# merges), (2) identidade EFETIVA do commit — autor E committer, cobrindo
+# --author e GIT_AUTHOR_*/GIT_COMMITTER_* — e (3) o padrão de mensagem.
+# O pre-push revalida os objetos reais como backstop final.
 msgfile="$1"
+branch=$(git symbolic-ref --short -q HEAD || true)
 head=$(head -n1 "$msgfile")
 
+if [ "$GIT_HUMAN" != "1" ]; then
+  # --- branches protegidas (inclui merges, que não passam pelo pre-commit) ---
+  if [ "$branch" = "main" ]; then
+    echo "ERRO: 'main' é branch humana - agente não commita nem mergeia aqui."
+    exit 1
+  fi
+  if [ "$branch" = "dev-ai" ] && [ ! -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
+    echo "ERRO: 'dev-ai' só recebe merges de PRs aprovados (AGENTS.md)."
+    exit 1
+  fi
+
+  # --- identidade efetiva: autor E committer ---
+  an="${GIT_AUTHOR_NAME:-$(git config user.name)}"
+  ae="${GIT_AUTHOR_EMAIL:-$(git config user.email)}"
+  cn="${GIT_COMMITTER_NAME:-$(git config user.name)}"
+  ce="${GIT_COMMITTER_EMAIL:-$(git config user.email)}"
+  case "$branch" in
+    zcode-ai) want_n="ai-zcode"; want_e="ai-zcode@users.noreply.github.com" ;;
+    codex-ai) want_n="ai-codex"; want_e="261107596+Fencing3422@users.noreply.github.com" ;;
+    *)        want_n="" ;;
+  esac
+  if [ -n "$want_n" ]; then
+    if [ "$an" != "$want_n" ] || [ "$ae" != "$want_e" ] || [ "$cn" != "$want_n" ] || [ "$ce" != "$want_e" ]; then
+      echo "ERRO: identidade incorreta na '$branch'."
+      echo "  autor:     $an <$ae>"
+      echo "  committer: $cn <$ce>"
+      echo "  exigido:   $want_n <$want_e> (autor E committer)"
+      echo "  Commite SEM --author e SEM GIT_AUTHOR_*/GIT_COMMITTER_* no ambiente:"
+      echo "  git -c user.name=$want_n -c user.email=$want_e commit ..."
+      exit 1
+    fi
+  fi
+fi
+
+# --- padrão de mensagem (merges são isentos) ---
 if echo "$head" | grep -qE '^Merge '; then
   exit 0
 fi

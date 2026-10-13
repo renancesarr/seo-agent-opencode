@@ -43,8 +43,14 @@ O número do PR é o identificador do review (substituiu as antigas branches `co
 
 ## Fluxo obrigatório
 
-1. **Sincronize** antes de começar qualquer tarefa:
-   `git checkout <sua-branch> && git merge origin/dev-ai`
+1. **Sincronize** antes de começar qualquer tarefa — a identidade do agente
+   assina também o commit de merge (quando não for fast-forward):
+   ```bash
+   git checkout <sua-branch>
+   git -c user.name=ai-zcode -c user.email=ai-zcode@users.noreply.github.com \
+     merge origin/dev-ai --no-edit
+   ```
+   (Codex usa a própria identidade nos flags `-c`.)
 2. **Desenvolva** somente na sua branch, com commits no padrão abaixo e assinados
    com a sua identidade (`-c user.name=... -c user.email=...`).
 3. **Abra o PR** para `dev-ai` (pela sua própria conta):
@@ -103,8 +109,13 @@ Exemplos:
 
 ## Enforcement
 
-- Hook `pre-commit`: bloqueia agente em `main`, commit não-merge em `dev-ai`, e
-  commits sem a identidade assinada correta em `zcode-ai`/`codex-ai`.
-  Humano: prefixe `GIT_HUMAN=1` quando precisar escrever nessas branches.
-- Hook `commit-msg`: valida o padrão de mensagem (merges são isentos).
+- Hook `pre-commit`: bloqueia agente em `main` e commit não-merge em `dev-ai`.
+- Hook `commit-msg`: valida o padrão de mensagem e a **identidade efetiva**
+  (autor E committer — cobre `--author` e `GIT_AUTHOR_*`/`GIT_COMMITTER_*`),
+  inclusive em merges (o `pre-commit` não roda neles); bloqueia merges de
+  agente em `main`.
+- Hook `pre-push`: backstop final — valida autor e committer dos **objetos
+  reais** empurrados para `zcode-ai`/`codex-ai`; commits já presentes no
+  remoto (herdados de `dev-ai` em merge de sincronização) são isentos.
+- Humano: prefixe `GIT_HUMAN=1` quando precisar escrever nessas branches.
 - GitHub: proteção de branch em `main`/`dev-ai` (a configurar quando houver token).
