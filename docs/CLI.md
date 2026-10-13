@@ -85,6 +85,51 @@ desconsiderando fragmento, são removidas. `unresponsive_engines` conserva falha
 informadas pelo provedor. Lista vazia não comprova ausência de concorrência.
 `--limit` limita a saída; não limita quantos mecanismos o SearXNG consulta.
 
+Para executar várias consultas e salvar os resultados acessíveis HTTP 200,
+crie um JSON com uma lista de textos e rode:
+
+```bash
+python3 -m seo_agent search-batch \
+  --queries-file data/consultas.json \
+  --output data/resultados.json \
+  --interval-seconds 300
+```
+
+Cada item agrupa `domain`, `urli` (título e URL), `searches` e `buscador`.
+URLs repetidas são coletadas uma vez; URLs finais de redirecionamento também são
+deduplicadas. `www.` é removido somente no agrupamento por domínio, sem supor
+que dois hosts respondam da mesma forma. O intervalo
+ocorre entre consultas completas, após a primeira e sem espera depois da última.
+O padrão de 300 segundos significa 40 minutos de espera para nove consultas.
+O lote consulta SearXNG e lê as URLs públicas; páginas com status diferente de
+200 ou falha de leitura são descartadas. Esta coleta não consulta `robots.txt`.
+
+`search-batch` lê `.env` automaticamente (`--env-file` escolhe outro arquivo);
+variáveis exportadas têm prioridade, inclusive valores vazios. Não executa o
+arquivo como shell nem expande `$VAR`. Campos vazios ou credenciais incompletas
+deixam a API fora do ciclo de consultas. Brave, Google CSE, Yandex, Mojeek,
+Kagi, You.com, SerpApi, Serper e DataForSEO têm adaptadores. A seleção é feita
+uma vez, antes da primeira consulta; não é necessário `--brave`.
+
+O SearXNG continua habilitado sem chave externa. Use `--no-searxng` para executar
+somente APIs configuradas. Sem nenhum provedor, a CLI retorna saída 2 antes de
+consultar ou esperar. Os campos obrigatórios estão em
+[CHAVES-BUSCADORES.md](CHAVES-BUSCADORES.md). Ter uma chave preenchida não garante
+elegibilidade, saldo ou acesso à API: uma chave inválida é tentada e reportada.
+
+SerpApi, Serper e DataForSEO consultam Google neste incremento; `buscador`
+registra `google`, enquanto o nome do fornecedor identifica eventuais falhas.
+Yandex usa busca internacional; Kagi herda preferências da conta. Os demais
+configuram Brasil/português conforme o contrato da API. Uma consulta deve citar
+cidade/estado para o recorte regional.
+
+Falha de uma API não interrompe as demais. O lote registra consulta, provedor
+e mensagem controlada em stderr e em `<arquivo de saída>.errors.json`, sem
+chaves ou corpo remoto. O arquivo principal conserva o contrato dos grupos.
+Havendo falhas e nenhuma página HTTP 200, a CLI salva ambos os arquivos e sai 2;
+resultados parciais ou busca válida sem resultados saem 0. Confira sempre o
+arquivo de erros. SearXNG reporta os mecanismos retornados em `buscador`.
+
 `inspect` faz uma auditoria de URL explícita: lê a página e consulta robots.txt
 mais um sitemap do host final. Não segue links encontrados. O relatório inclui:
 

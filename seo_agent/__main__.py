@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import re
 import sqlite3
+import sys
 from uuid import uuid4
 
 
@@ -89,6 +90,15 @@ def main():
     search.add_argument('--endpoint', default='http://127.0.0.1:8080')
     search.add_argument('--language', default='pt-BR')
     search.add_argument('--limit', type=int, default=5)
+    batch = commands.add_parser('search-batch', help='Pesquisar consultas em sequência e coletar páginas HTTP 200.')
+    batch.add_argument('--queries-file', type=Path, required=True,
+                       help='Arquivo JSON contendo uma lista de consultas.')
+    batch.add_argument('--output', type=Path, required=True)
+    batch.add_argument('--endpoint', default='http://127.0.0.1:8080')
+    batch.add_argument('--language', default='pt-BR')
+    batch.add_argument('--interval-seconds', type=int, default=300)
+    batch.add_argument('--env-file', type=Path, default=Path('.env'), help='Credenciais locais; ambiente exportado tem prioridade.')
+    batch.add_argument('--no-searxng', action='store_true', help='Usar somente APIs configuradas.')
     inspect = commands.add_parser('inspect', help='Ler conteúdo e sinais SEO de uma URL pública.')
     inspect.add_argument('--url', required=True)
     crawl = commands.add_parser('crawl', help='Buscar, percorrer páginas públicas e comparar viewports.')
@@ -103,6 +113,35 @@ def main():
         if args.command == 'search':
             from seo_agent.web import search_web
             result = search_web(args.query, endpoint=args.endpoint, language=args.language, limit=args.limit)
+        elif args.command == 'search-batch':
+            from seo_agent.search_batch import run_queries
+            from seo_agent.search_providers import configured_providers, SearchProvider
+            from seo_agent.web import search_web
+            queries = json.loads(args.queries_file.read_text(encoding='utf-8'))
+            if (not isinstance(queries, list) or not queries
+                    or any(not isinstance(query, str) or not query.strip() for query in queries)):
+                raise ValueError('O arquivo de consultas deve conter uma lista não vazia de textos.')
+            def searxng(query):
+                result = search_web(query, endpoint=args.endpoint, language=args.language, limit=20)
+                return [{'title': item['title'], 'url': item['url'],
+                         'buscador': item['engines'] or ['searxng']}
+                        for item in result['results']]
+            providers = configured_providers(env_file=args.env_file)
+            if not args.no_searxng:
+                providers.insert(0, SearchProvider('searxng', searxng))
+            if not providers:
+                raise ValueError('Nenhum provedor configurado: preencha as credenciais ou habilite SearXNG.')
+            errors = []
+            def report_error(error):
+                errors.append(error)
+                print(json.dumps(error, ensure_ascii=False), file=sys.stderr)
+            result = run_queries(queries, providers, interval_seconds=args.interval_seconds, on_error=report_error)
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+            error_file = args.output.with_name(args.output.name + '.errors.json')
+            error_file.write_text(json.dumps(errors, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+            if errors and not result:
+                raise ValueError('O lote não obteve páginas HTTP 200 e houve falhas de busca; confira o arquivo .errors.json.')
         elif args.command == 'inspect':
             from seo_agent.web import inspect_page
             result = inspect_page(args.url)

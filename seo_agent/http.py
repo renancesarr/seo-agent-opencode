@@ -36,7 +36,7 @@ def _require_public(address):
         raise ValueError('Destino sem IP público: informe uma URL pública para leitura.')
 
 
-def _fetch_once(url, *, allow_private):
+def _fetch_once(url, *, allow_private, headers=None, method='GET', body=None):
     try:
         parsed = urlsplit(url)
         host = parsed.hostname
@@ -85,9 +85,11 @@ def _fetch_once(url, *, allow_private):
         connection.sock = sock
         target = quote(urlunsplit(('', '', parsed.path or '/', parsed.query, '')),
                        safe="/%?:@!$&'()*+,;=-._~[]")
-        connection.request('GET', target, headers={
+        request_headers = {
             'User-Agent': 'SEOAgent/0.1', 'Accept-Encoding': 'identity',
-        })
+        }
+        request_headers.update(headers or {})
+        connection.request(method, target, body=body, headers=request_headers)
         with connection.getresponse() as incoming:
             headers = {name.lower(): incoming.getheader(name) for name, _ in incoming.getheaders()}
             if (headers.get('content-encoding', 'identity').strip().lower() not in ('', 'identity')
@@ -104,11 +106,14 @@ def _fetch_once(url, *, allow_private):
             sock.close()
 
 
-def fetch_url(url, *, allow_private=False):
+def fetch_url(url, *, allow_private=False, headers=None, method='GET', body=None):
+    if method not in {'GET', 'POST'}:
+        raise ValueError('Método HTTP suportado: GET ou POST.')
     redirects = []
     while True:
         try:
-            response = _fetch_once(url, allow_private=allow_private)
+            response = _fetch_once(url, allow_private=allow_private, headers=headers,
+                                   method=method, body=body)
         except http.client.HTTPException as error:
             raise ValueError('Resposta HTTP inválida ou incompleta: confira o servidor e tente novamente.') from error
         except UnicodeError as error:
@@ -117,8 +122,8 @@ def fetch_url(url, *, allow_private=False):
         if response.status not in (301, 302, 303, 307, 308) or not location:
             response.redirects = redirects
             return response
-        if allow_private:
-            raise ValueError('Endpoint de busca redirecionou: configure sua URL final diretamente.')
+        if allow_private or headers or method != 'GET':
+            raise ValueError('Endpoint com cabeçalhos restritos redirecionou: configure a URL final diretamente.')
         if len(redirects) >= 5:
             raise ValueError('Limite de 5 redirecionamentos: informe a URL final da página.')
         if any(ord(char) <= 32 or ord(char) == 127 for char in location):
