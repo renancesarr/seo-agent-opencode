@@ -8,6 +8,12 @@ Estar neste backlog não significa estar implementado, contratado ou ativado.
 Solicitado pelo usuário em 13/10/2026. Estado: **pendente**. Executar após a
 verificação local do lote de APIs T04P; não bloqueia o fluxo de produto T03.
 
+Decomposto, com aprovação do usuário, em
+[#18 — captura DOM e comparação](https://github.com/renancesarr/seo-agent-opencode/issues/18)
+e [#19 — busca e fallback](https://github.com/renancesarr/seo-agent-opencode/issues/19),
+sob a especificação [#9](https://github.com/renancesarr/seo-agent-opencode/issues/9).
+#19 depende de #18; ambos continuam pendentes de implementação/aceite.
+
 Objetivo: avaliar se Kitesurf consegue capturar o DOM renderizado necessário
 à análise SEO de páginas e extrair resultados de buscas em sites compatíveis,
 comparando qualidade, tempo e consumo com Chromium. O desejo de obter “todo o

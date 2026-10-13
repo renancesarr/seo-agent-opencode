@@ -10,6 +10,23 @@ Ao implementar ou retomar o agente SEO, leia [docs/SEO-AGENT-MVP.md](docs/SEO-AG
 e execute a primeira tarefa disponível de [docs/EXECUCAO.md](docs/EXECUCAO.md).
 Registre verificação e estado da tarefa antes de avançar.
 
+## Agent skills
+
+### Issue tracker
+
+Especificações e tickets vivem no GitHub Issues de `renancesarr/seo-agent-opencode`.
+Veja [configuração do tracker](docs/agents/issue-tracker.md).
+
+### Triage labels
+
+Usar `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human` e `wontfix`.
+Veja [vocabulário de triagem](docs/agents/triage-labels.md).
+
+### Domain docs
+
+Domínio único: leia GLOSSARY.md, o contrato do MVP e os ADRs pertinentes antes
+de escrever specs ou tickets. Veja [documentos do domínio](docs/agents/domain.md).
+
 ## Identidade e assinatura
 
 Cada agente assina tudo o que produz (commits, PRs, issues, reviews) e empurra
