@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Backstop final: valida a identidade REAL (autor E committer dos objetos)
+# de todo commit novo empurrado para as branches de agente. Cobre qualquer
+# bypass local (--author, env, merges, hooks pulados) porque inspeciona os
+# commits que efetivamente vão para o remoto — não o ambiente.
+# Commits já presentes em refs remotas ou nos trunks locais (main/dev-ai),
+# ex.: herdados de dev-ai em um merge de sincronização, são isentos.
+# FAIL-CLOSED: se a enumeração dos commits falhar, o push é bloqueado.
+remote="$1"
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$GIT_HUMAN" = "1" ] && continue
+  [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
+
+  case "$remote_ref" in
+    refs/heads/zcode-ai) want_n="ai-zcode"; want_e="ai-zcode@users.noreply.github.com" ;;
+    refs/heads/codex-ai) want_n="ai-codex"; want_e="261107596+Fencing3422@users.noreply.github.com" ;;
+    *) continue ;;
+  esac
+
+  # Refs de exclusão: tudo que já está no remoto + trunks locais.
+  # Só usa refs que existem de fato (for-each-ref não inventa nomes).
+  excl=()
+  while IFS= read -r r; do
+    [ -n "$r" ] && excl+=("$r")
+  done < <(git for-each-ref --format='%(refname)' "refs/remotes/$remote/main" "refs/remotes/$remote/dev-ai" refs/heads/main refs/heads/dev-ai)
+
+  if [ "${#excl[@]}" -gt 0 ]; then
+    set -- "$local_sha" --not "${excl[@]}"
+  else
+    set -- "$local_sha"
+  fi
+  if ! revs=$(git rev-list "$@"); then
+    echo "ERRO (pre-push): falha ao enumerar commits de $local_ref — bloqueando por segurança (fail-closed)."
+    exit 1
+  fi
+
+  for c in $revs; do
+    IFS='|' read -r an ae cn ce <<< "$(git log -1 --format='%an|%ae|%cn|%ce' "$c")"
+    if [ "$an" != "$want_n" ] || [ "$ae" != "$want_e" ] || [ "$cn" != "$want_n" ] || [ "$ce" != "$want_e" ]; then
+      echo "ERRO (pre-push): commit com identidade incorreta indo para $local_ref:"
+      echo "  commit:    $c"
+      echo "  autor:     $an <$ae>"
+      echo "  committer: $cn <$ce>"
+      echo "  exigido:   $want_n <$want_e> (autor E committer)"
+      exit 1
+    fi
+  done
+done
+exit 0
