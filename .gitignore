@@ -1,0 +1,20 @@
+# ambiente
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+dist/
+build/
+*.log
+.DS_Store
+
+# dados locais de serviços (grafo, vetorial, cache)
+data/
+
+# workspaces locais de agentes
+.zcode/
+.opencode/

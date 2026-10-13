@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Protege branches de integração:
+# - main: somente humano (GIT_HUMAN=1)
+# - dev-ai: somente merges (branch de review aprovada) ou humano
+branch=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$branch" = "main" ] && [ "$GIT_HUMAN" != "1" ]; then
+  echo "ERRO: 'main' é branch humana - agente não commita aqui."
+  echo "Agentes: trabalhe em zcode-ai/codex-ai e siga o fluxo de review (AGENTS.md)."
+  echo "Humano: GIT_HUMAN=1 git commit ... (ou --no-verify)."
+  exit 1
+fi
+
+if [ "$branch" = "dev-ai" ] && [ "$GIT_HUMAN" != "1" ]; then
+  if [ ! -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
+    echo "ERRO: 'dev-ai' só recebe merges de branches code-review/<id> aprovadas."
+    echo "Trabalhe em zcode-ai/codex-ai; o agente oposto revisa; só então o merge (AGENTS.md)."
+    exit 1
+  fi
+fi
+exit 0

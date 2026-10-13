@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Valida o padrão de commit (ver AGENTS.md):
+#   <tipo>(<escopo>?): <descrição>
+# Merge commits são isentos (começam com "Merge").
+msgfile="$1"
+head=$(head -n1 "$msgfile")
+
+if echo "$head" | grep -qE '^Merge '; then
+  exit 0
+fi
+
+pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|seo)(\([a-zA-Z0-9_./-]+\))?: .+'
+if ! echo "$head" | grep -qE "$pattern"; then
+  echo "ERRO: mensagem fora do padrão:"
+  echo "  <tipo>(<escopo>-opcional): <descrição curta, imperativo>"
+  echo "  tipos: feat fix docs style refactor perf test build ci chore seo"
+  echo "  ex.: feat(scraper): adicionar cliente da API JSON do SearXNG"
+  exit 1
+fi
+
+# Commits vindos das branches de agente exigem o rodapé Agent:
+branch=$(git rev-parse --abbrev-ref HEAD)
+case "$branch" in
+  zcode-ai)
+    grep -qE '^Agent: zcode' "$msgfile" || {
+      echo "ERRO: commits da zcode-ai exigem o rodapé 'Agent: zcode-ai'"; exit 1; } ;;
+  codex-ai)
+    grep -qE '^Agent: codex' "$msgfile" || {
+      echo "ERRO: commits da codex-ai exigem o rodapé 'Agent: codex-ai'"; exit 1; } ;;
+esac
+exit 0
