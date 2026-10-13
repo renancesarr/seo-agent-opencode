@@ -1,0 +1,13 @@
+{
+  "project": "projeto.json",
+  "store": "../data/seo-agent.sqlite3",
+  "hours": ["08:00", "20:00"],
+  "timezone": "America/Sao_Paulo",
+  "max_queries": 10,
+  "max_pages": 20,
+  "max_seconds": 900,
+  "recovery": "skip",
+  "model": "ollama/gemma4:e4b",
+  "env_file": "../.env",
+  "no_searxng": false
+}

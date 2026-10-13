@@ -91,6 +91,11 @@ def collect_project(project, providers, *, fetch=None, max_pages=10, max_queries
     def observe(provider):
         def search(query):
             items = provider(query)
+            if isinstance(items, dict):
+                if items.get('partial_failure'):
+                    errors.append({'stage': 'search', 'provider': provider.name, 'query': query,
+                                   'error': 'Um ou mais motores do provedor ficaram indisponíveis; conferir a instância.'})
+                items = items['results']
             for item in items:
                 candidate(item, query=query)
             return items

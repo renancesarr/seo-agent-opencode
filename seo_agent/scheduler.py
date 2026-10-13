@@ -16,7 +16,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 @contextmanager
 def project_lock(store, project_id):
-    directory = store.resolve().parent / (store.name + '.locks')
+    store = store.resolve()
+    directory = store.parent / (store.name + '.locks')
     directory.mkdir(parents=True, exist_ok=True)
     with (directory / project_id).open('a') as handle:
         try:
@@ -100,15 +101,19 @@ def schedule_tick(config_file, *, clock=None, worker=None):
     if config.get('no_searxng'):
         command.append('--no-searxng')
     command += ['--env-file', str((config_file.parent / config.get('env_file', '.env')).resolve())]
+    interrupted = False
     try:
         result = (worker or run_worker)(command, config['max_seconds'])
         record = {'status': 'executed', 'slot': slot, 'run_id': result['run_id'], 'run_status': result['status']}
-    except (OSError, ValueError, KeyError):
+    except (OSError, ValueError, KeyError, KeyboardInterrupt) as error:
+        interrupted = isinstance(error, KeyboardInterrupt)
         failed = prepare_run(project, store, status='failed', result={'sources': [],
             'errors': [{'stage': 'scheduler', 'error': 'Rodada falhou ou excedeu tempo; investigar dependências, limites e concorrência.'}],
             'pending': ['Últimos resultados válidos preservados.']})
-        record = {'status': 'failed', 'slot': slot, 'run_id': failed['run_id']}
+        record = {'status': 'interrupted' if interrupted else 'failed', 'slot': slot, 'run_id': failed['run_id']}
     with closing(sqlite3.connect(store)) as database, database:
         database.execute('UPDATE schedule_slots SET record=? WHERE project_id=? AND slot=?',
                          (json.dumps(record), project['id'], slot))
+    if interrupted:
+        raise KeyboardInterrupt
     return record

@@ -45,7 +45,8 @@ class OpenCodeGenerator:
         message = (PROMPT + '\nSua resposta deve começar com { e terminar com }. '
                    'Sem introdução, markdown, bloco de código ou nota. '
                    'Não atribua à fonte temas que ela não contém; exponha insuficiência em pending.\n'
-                   + json.dumps({'project': project, 'sources': evidence}, ensure_ascii=False))
+                   + json.dumps({'project': project, 'sources': evidence,
+                                 'review_request': result.get('review_request')}, ensure_ascii=False))
         with tempfile.TemporaryDirectory(prefix='seo-outline-') as directory:
             env = os.environ | {'XDG_CONFIG_HOME': directory, 'PWD': directory,
                                 'OPENCODE_CONFIG_CONTENT': json.dumps(config)}
@@ -67,9 +68,16 @@ class OpenCodeGenerator:
         parts = []
         for line in response.stdout.splitlines():
             event = json.loads(line)
-            if event.get('type') in {'error', 'tool_use', 'tool_result'} or event.get('part', {}).get('type') == 'tool':
+            if not isinstance(event, dict):
+                raise ValueError('Evento OpenCode inválido.')
+            part = event.get('part') or {}
+            if not isinstance(part, dict):
+                raise ValueError('Parte do evento OpenCode inválida.')
+            if event.get('type') in {'error', 'tool_use', 'tool_result'} or part.get('type') == 'tool':
                 result['generator']['status'] = 'error_or_tool_attempt'
                 raise ValueError('OpenCode reportou erro ou tentativa de ferramenta.')
             if event.get('type') == 'text':
-                parts.append(event['part']['text'])
+                if not isinstance(part.get('text'), str):
+                    raise ValueError('Texto do evento OpenCode inválido.')
+                parts.append(part['text'])
         return json.loads(''.join(parts))

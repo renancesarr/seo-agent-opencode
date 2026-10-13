@@ -101,8 +101,10 @@ A implementação deve justificar cada dependência pelo critério que ela atend
 Antes de ativar o monitoramento, definir: horário e fuso, limites de consultas,
 páginas e tempo por execução, comportamento quando a máquina estiver desligada,
 canal de aviso e local de revisão. O usuário atualizou a frequência para duas
-rodadas por dia, às 8h e 20h. Fuso, limites e retomada exigem configuração
-explícita antes da ativação; o procedimento está em [FLUXO-PROJETO.md](FLUXO-PROJETO.md).
+rodadas por dia, às 8h e 20h, America/Sao_Paulo, com teto de 10 consultas,
+20 páginas e 15 minutos, pulando horários perdidos. O arquivo do projeto de
+monitoramento precisa ser escolhido antes da ativação; veja
+[FLUXO-PROJETO.md](FLUXO-PROJETO.md).
 
 O desenvolvedor deve registrar a escolha de persistência, leitor de páginas,
 integração com OpenCode e regra de comparação junto à tarefa que os implementa.

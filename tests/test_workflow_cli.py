@@ -134,6 +134,14 @@ class WorkflowCLI(unittest.TestCase):
                                  url=url, status=200, headers={'content-type': 'text/html'}, text=lambda: '<p>Novo conteúdo</p>'),
                              model_runner=bad_runner)
         self.assertEqual(record['result']['errors'][-1]['stage'], 'generation')
+        for event in (None, {'type': 'text', 'part': None}):
+            def malformed(*args, **kwargs):
+                return SimpleNamespace(returncode=0, stdout=json.dumps(event))
+            record = self.invoke('run', '--project', str(self.project_file), '--store', str(self.store),
+                                 '--model', 'ollama/fixture', providers=[], fetch=lambda url: SimpleNamespace(
+                                     url=url, status=200, headers={'content-type': 'text/html'}, text=lambda: '<p>Novo conteúdo</p>'),
+                                 model_runner=malformed)
+            self.assertEqual(record['result']['errors'][-1]['stage'], 'generation')
 
     def test_new_read_candidate_and_partial_failure_are_explicit(self):
         first = self.researched_run(self.proposal())
@@ -174,6 +182,39 @@ class WorkflowCLI(unittest.TestCase):
         self.invoke('run', '--project', str(self.project_file), '--store', str(self.store), providers=[search])
         self.assertEqual(calls, ['horta Brasil'])
         self.assertEqual(len(self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']), 1)
+
+    def test_recovery_after_unavailable_source_preserves_original_version(self):
+        first = self.researched_run(self.proposal())
+        self.invoke('run', '--project', str(self.project_file), '--store', str(self.store),
+                    providers=[lambda query: []])
+        recovered = self.researched_run(None)
+        self.assertEqual(recovered['result']['outline'], first['result']['outline'])
+        self.assertEqual(recovered['result']['comparison']['added'], [])
+
+    def test_human_request_can_revise_proposal_without_changing_sources(self):
+        first = self.researched_run(self.proposal())
+        version = first['result']['outline']['version_id']
+        self.invoke('review', '--project-id', 'horta', '--version-id', version, '--decision',
+                    'request-changes', '--reason', 'Melhorar título', '--store', str(self.store))
+        corrected = self.proposal() | {'title': 'Solo fértil: como preparar'}
+        second = self.researched_run(corrected)
+        self.assertNotEqual(second['result']['outline']['version_id'], version)
+        self.assertEqual(second['result']['outline']['proposal']['title'], corrected['title'])
+        self.assertEqual(second['result']['review_request']['reason'], 'Melhorar título')
+
+    def test_searxng_partial_engine_failure_is_recorded_with_available_results(self):
+        from seo_agent.http import Response
+        def fetch(url, **options):
+            if url.startswith('http://127.0.0.1:8080'):
+                payload = {'results': [{'url': 'https://example.org/guide', 'title': 'Guia', 'engines': ['google']}],
+                           'unresponsive_engines': [['brave', 'rate limit']]}
+                return Response(url, 200, {'content-type': 'application/json'}, json.dumps(payload).encode(), [], [], None)
+            return Response(url, 200, {'content-type': 'text/html'}, b'<h1>Plantar</h1>', [], [], None)
+        record = self.invoke('run', '--project', str(self.project_file), '--store', str(self.store),
+                             '--env-file', str(self.directory / 'absent.env'), fetch=fetch, environment={})
+        self.assertEqual(record['status'], 'partial')
+        self.assertTrue(record['result']['errors'])
+        self.assertEqual(len(record['result']['sources']), 1)
 
     def test_run_reads_unique_pages_and_persists_provenance_and_failures(self):
         def search(query):

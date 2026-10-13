@@ -4,9 +4,12 @@ import hashlib
 import json
 
 
-def compare_evidence(project, result, runs):
+def compare_evidence(project, result, runs, review_request=None):
     previous_run = next((run for run in reversed(runs)
                      if (run.get('result') or {}).get('outline')), None)
+    if previous_run:
+        origin = previous_run['result']['outline'].get('created_run_id')
+        previous_run = next((run for run in runs if run['run_id'] == origin), previous_run)
     previous = previous_run['result'] if previous_run else None
     def signatures(collection):
         return {source['url']: {field: source['page'].get(field) for field in
@@ -19,7 +22,10 @@ def compare_evidence(project, result, runs):
                   'project_changed': bool(previous_run and previous_run['project'] != project),
                   'basis': 'Conteúdo textual, título, descrição, headings e JSON-LD; mudanças requerem revisão humana.'}
     result['comparison'] = comparison
-    if previous and not comparison['added'] and not comparison['changed'] and not comparison['project_changed']:
+    if review_request:
+        result['review_request'] = review_request
+    if (previous and not review_request and not comparison['added'] and not comparison['changed']
+            and not comparison['project_changed']):
         result['outline'] = previous['outline']
         if comparison['unavailable']:
             result['pending'].append('Fontes anteriores indisponíveis; manter versão válida e investigar coleta.')

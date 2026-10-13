@@ -85,7 +85,7 @@ def history(project_id, store):
 
 def execute_project(args, project, providers, fetch, wait, generate):
     from seo_agent.workflow import collect_project
-    from seo_agent.outlines import create_outline
+    from seo_agent.outlines import create_outline, get_outline
     from seo_agent.monitoring import compare_evidence
     from seo_agent.scheduler import project_lock
     with project_lock(args.store, project['id']):
@@ -94,7 +94,15 @@ def execute_project(args, project, providers, fetch, wait, generate):
         if args.proposal_file:
             def generate(project, evidence):
                 return json.loads(args.proposal_file.read_text(encoding='utf-8'))
-        if compare_evidence(project, collected, history(project['id'], args.store)['runs']):
+        runs = history(project['id'], args.store)['runs']
+        latest = next(((run.get('result') or {}).get('outline') for run in reversed(runs)
+                       if (run.get('result') or {}).get('outline')), None)
+        request = None
+        if latest:
+            reviewed = get_outline(project['id'], latest['version_id'], args.store, runs)
+            if reviewed['outline']['review_status'] == 'request-changes':
+                request = reviewed['reviews'][-1]
+        if compare_evidence(project, collected, runs, request):
             create_outline(project, collected, generate)
         if collected['errors'] and collected['sources']:
             status = 'partial'
@@ -193,13 +201,14 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
                 from seo_agent.opencode import OpenCodeGenerator
                 generate = OpenCodeGenerator(args.model, runner=model_runner)
             if providers is None:
-                providers = configured_providers(env_file=args.env_file, fetch=fetch)
+                providers = configured_providers(environment, env_file=args.env_file, fetch=fetch)
                 if not args.no_searxng:
                     def searxng(query):
                         discovery = search_web(query, endpoint=args.endpoint, language=project['language'],
                                                limit=20, fetch=fetch)
-                        return [{'url': item['url'], 'title': item['title'],
-                                 'buscador': item['engines'] or ['searxng']} for item in discovery['results']]
+                        return {'results': [{'url': item['url'], 'title': item['title'],
+                                 'buscador': item['engines'] or ['searxng']} for item in discovery['results']],
+                                'partial_failure': bool(discovery['unresponsive_engines'])}
                     providers.insert(0, SearchProvider('searxng', searxng))
             if not providers and not project.get('sources') and not project.get('competitors'):
                 raise ValueError('Nenhum provedor ou fonte indicada disponível para o projeto.')

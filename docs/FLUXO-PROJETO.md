@@ -75,13 +75,19 @@ do projeto. CSS/espaços sem alterar esses sinais conservam a versão e dispensa
 geração. Fonte nova lida ou mudança nesses sinais justifica nova proposta para
 revisão, sem provar relevância editorial. Falhas/fontes indisponíveis não provam
 remoção factual. Versão conservada aponta a execução e fontes originais.
+Após pedido de ajustes, a justificativa humana também autoriza nova geração
+com fontes inalteradas; ela é entregue ao gerador e a nova versão volta a `pending`.
+Recuperação de fonte compara com a execução original da versão, sem criar
+atualização falsa depois de uma rodada parcial.
 Avisos locais distinguem versão e falha, com identificadores para consulta.
 O mesmo fato inalterado não é avisado novamente. Não há envio externo.
 
 ## Agendamento explícito
 
-O usuário definiu 8h e 20h. A ativação ainda exige configurar fuso, limites e
-retomada. Exemplo proposto, sem instalar ou iniciar job:
+O usuário definiu 8h e 20h, fuso `America/Sao_Paulo`, 10 consultas, 20 páginas,
+15 minutos e descarte dos horários perdidos. Falta escolher o arquivo do projeto
+para ativar; o exemplo de horta não foi escolhido para monitoramento. Configuração
+confirmada, sem instalar ou iniciar job:
 
 ```json
 {
@@ -92,7 +98,7 @@ retomada. Exemplo proposto, sem instalar ou iniciar job:
   "max_queries": 10,
   "max_pages": 20,
   "max_seconds": 900,
-  "recovery": "once",
+  "recovery": "skip",
   "model": "ollama/gemma4:e4b",
   "env_file": "../.env",
   "no_searxng": false
