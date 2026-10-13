@@ -6,14 +6,18 @@ Goal-Driven Execution) vêm das instruções globais do usuário e continuam val
 
 ## Identidade e assinatura
 
-Cada agente assina tudo o que produz (commits, PRs, issues, reviews):
+Cada agente assina tudo o que produz (commits, PRs, issues, reviews) e empurra
+pela própria conta GitHub:
 
-| Agente | Identidade git (commits) | Assinatura em PR/issue/review |
-|---|---|---|
-| ZCode | `-c user.name=ai-zcode -c user.email=ai-zcode@users.noreply.github.com` | `Signed-by: ai-zcode (GLM-5.3)` |
-| Codex | `-c user.name=ai-codex -c user.email=ai-codex@users.noreply.github.com` | `Signed-by: ai-codex (GPT-6 Astra Ultra)` |
+| Agente | Identidade git (commits) | Assinatura | Conta GitHub / transporte |
+|---|---|---|---|
+| ZCode | `-c user.name=ai-zcode -c user.email=ai-zcode@users.noreply.github.com` | `Signed-by: ai-zcode (GLM-5.3)` | `origin` (conta `renancesarr`, chave padrão) |
+| Codex | `-c user.name=ai-codex -c user.email=ai-codex@users.noreply.github.com` | `Signed-by: ai-codex (GPT-6 Astra Ultra)` | conta bot `ai-codex`, via `origin-codex` (chave `~/.ssh/id_ed25519_ai_codex`; `branch.codex-ai.pushRemote` já configurado) |
 
 O hook `pre-commit` **exige** a identidade correta na branch correspondente.
+Empurre sempre com `git push` (sem nomear o remote): o git já roteia cada branch
+para a conta certa. A separação de contas é o que permite ao GitHub **exigir 1
+aprovação** em `dev-ai` — o autor do PR nunca é quem aprova.
 
 ## Modelo de branches e review
 
@@ -33,9 +37,9 @@ O número do PR é o identificador do review (substituiu as antigas branches `co
    `git checkout <sua-branch> && git merge origin/dev-ai`
 2. **Desenvolva** somente na sua branch, com commits no padrão abaixo e assinados
    com a sua identidade (`-c user.name=... -c user.email=...`).
-3. **Abra o PR** para `dev-ai`:
+3. **Abra o PR** para `dev-ai` (pela sua própria conta):
    ```bash
-   git push origin <sua-branch>
+   git push                    # roteia para a conta certa da branch
    gh pr create --base dev-ai --head <sua-branch> \
      --title "[ai-zcode] resumo curto" \
      --body-file .github/PULL_REQUEST_TEMPLATE.md
