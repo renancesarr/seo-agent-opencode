@@ -46,7 +46,7 @@ antes de considerá-los prontos para integração.
 | T00 | Consolidar decisões, processo e critérios de aceite | — | integrada |
 | T01 | Verificar integração disponível no OpenCode e definir contrato técnico mínimo | T00 | integrada |
 | T02 | Configuração de projeto e estrutura de execução genérica | T01 | integrada |
-| T04A | Busca web, leitura de HTML e inspeção SEO | T02 | verificada localmente |
+| T04A | Busca web, leitura de HTML e inspeção SEO | T02 | em revisão |
 | T04N | Navegação, jornadas observadas e comparação por tela | T04A | pendente |
 | T03 | Fluxo manual completo com fontes simuladas, histórico e revisão | T04A | pendente |
 | T04B | Integrar coleta e geração de outlines pelo OpenCode | T03 | pendente |
@@ -174,7 +174,9 @@ T02 — verificada localmente em 13/10/2026:
 - Exemplo da CLI validado; sintaxe Python, 33 links locais da documentação e
   `git diff --check` verificados.
 
-T04A — verificada localmente em 13/10/2026, revisão cruzada pendente:
+T04A — verificada localmente em 13/10/2026, no
+[PR #6](https://github.com/renancesarr/seo-agent-opencode/pull/6), de `codex-ai`
+para `dev-ai`; revisão cruzada pendente:
 
 - `python3 -B -m unittest discover -s tests -v`: 43 testes isolados passaram.
   Ciclos red→green para busca, extração, transporte e comandos. A revisão interna
