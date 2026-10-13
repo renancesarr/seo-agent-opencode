@@ -19,7 +19,9 @@ você. A branch `main` é exclusivamente humana.
 |---|---|
 | [AGENTS.md](AGENTS.md) | **Regras vinculantes do workflow** — fluxo, identidade, padrão de commit, checklist de review. É a sua lei aqui. |
 | [README.md](README.md) | Visão geral do projeto e do modelo de branches |
-| [IDEIA.md](IDEIA.md) | Spec completa do produto: camadas, subagentes de SEO, stack, fases, critérios de sucesso |
+| [docs/SEO-AGENT-MVP.md](docs/SEO-AGENT-MVP.md) | Contrato da primeira versão: decisões, entrada, saída e processo do agente |
+| [docs/EXECUCAO.md](docs/EXECUCAO.md) | Tarefa disponível, dependências, critérios de aceite e evidências |
+| [IDEIA.md](IDEIA.md) | Visão de longo prazo e arquitetura pretendida |
 | [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md) | Checklist que você usa como autor e como revisor de PRs |
 | `spec-dev-ai.md` | ⚠️ **Histórico, NÃO usar**: spec antiga com mecanismos inválidos (zcode-config.yaml, codex-config.json etc.). Foi substituída pelo AGENTS.md + IDEIA.md. |
 
@@ -78,40 +80,21 @@ Surgical Changes, Goal-Driven Execution) já estão nas suas instruções globai
 7. humano homologa dev-ai → main
 ```
 
-## 6. Estado atual do projeto (out/2026)
+## 6. Retomada do desenvolvimento
 
-- **Infra de workflow pronta e testada**: branches (`main`, `dev-ai`,
-  `zcode-ai`, `codex-ai`), hooks locais, contas separadas, PR template,
-  MIT license, README.
-- **PR #1 aberto** (6 commits, autor `ai-zcode`): todo o workflow de review
-  via PR + assinaturas + contas GitHub separadas. Aguardando **a sua revisão**.
-- **Proteção de branch no GitHub pendente**: o token do humano ainda não tem
-  permissão Administration; quando ativar, `dev-ai` exigirá 1 aprovação
-  (a sua, em PRs do ZCode) e `main` só aceitará PR.
-- **Produto em Fase 1** (ver IDEIA.md §7): `docker-compose.yml` com SearXNG
-  existe, mas falta `searxng/settings.yml` (habilitar API JSON) e subir;
-  Ollama já roda com deepseek-r1:32b e Qwen 27B; container `crawl4ai-mcp`
-  existe parado.
-- **Skills locais** em `~/.agents/src/` (mattpocock + karpathy), ligadas em
-  `~/.agents/skills/` e `~/.codex/skills/` — disponíveis para você.
+O produto é uma ferramenta genérica de SEO para OpenCode. O portal de igrejas
+fornece contexto de um futuro teste; a entrega atual é o processo a implementar
+no agente, descrito em [docs/SEO-AGENT-MVP.md](docs/SEO-AGENT-MVP.md).
 
-## 7. Sua tarefa imediata
+Para continuar:
 
-**Revise o PR #1** seguindo o checklist do template:
+1. Leia o estado e as evidências em [docs/EXECUCAO.md](docs/EXECUCAO.md).
+2. Escolha a primeira tarefa com dependências atendidas.
+3. Implemente e verifique seu aceite; registre o que foi executado e o que ficou pendente.
+4. Siga o workflow de PR e revisão cruzada das seções anteriores.
 
-```bash
-git fetch origin
-GH_TOKEN="$(gh auth token --user Fencing3422)" gh pr diff 1 --repo renancesarr/seo-agent-opencode
-```
+Em tarefas de review, consulte o estado atual do PR indicado pelo usuário e
+[docs/REVIEW-WORKFLOW.md](docs/REVIEW-WORKFLOW.md). O histórico deste handoff
+não substitui a verificação do estado remoto de PRs ou proteções.
 
-Verifique: regras do AGENTS.md coerentes e executáveis, mensagens de commit no
-padrão, hooks corretos, sem overengineering. Se aprovado:
-
-```bash
-GH_TOKEN="$(gh auth token --user Fencing3422)" gh pr review 1 --approve \
-  --body "Aprovado: <resumo da verificação>. Signed-by: ai-codex (GPT-6 Astra Ultra)"
-GH_TOKEN="$(gh auth token --user Fencing3422)" gh pr merge 1 --merge
-```
-
-Se reprovar: `--request-changes` com problemas concretos e acionáveis.
-Documente decisões duvidosas como issues (`gh issue create`, com `Signed-by`).
+Signed-by: ai-codex (GPT-6 Astra Ultra)

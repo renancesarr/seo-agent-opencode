@@ -4,6 +4,12 @@ Regras vinculantes para todos os agentes (ZCode/GLM-5.3, Codex/GPT-6 Astra Ultra
 Os Quatro Princípios Fundamentais (Think Before Coding, Simplicity First, Surgical Changes,
 Goal-Driven Execution) vêm das instruções globais do usuário e continuam valendo aqui.
 
+## Desenvolvimento do produto
+
+Ao implementar ou retomar o agente SEO, leia [docs/SEO-AGENT-MVP.md](docs/SEO-AGENT-MVP.md)
+e execute a primeira tarefa disponível de [docs/EXECUCAO.md](docs/EXECUCAO.md).
+Registre verificação e estado da tarefa antes de avançar.
+
 ## Identidade e assinatura
 
 Cada agente assina tudo o que produz (commits, PRs, issues, reviews) e empurra

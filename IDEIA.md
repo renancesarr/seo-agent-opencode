@@ -1,5 +1,10 @@
 # Especificação do Projeto: Executor de Possibilidades - Sistema Multiagente Local para SEO e Engenharia de Software
 
+> Para desenvolver a primeira versão, siga o [contrato do MVP](docs/SEO-AGENT-MVP.md)
+> e o [processo de execução](docs/EXECUCAO.md). Este documento preserva a visão
+> de longo prazo; sua lista de tecnologias e fases não amplia automaticamente
+> o escopo do incremento atual.
+
 ## 1. Visão Geral do Projeto
 
 O **Executor de Possibilidades** é um sistema multiagente de IA local, **nativo do OpenCode** (runtime: subagentes, skills e servidores MCP do OpenCode, já instalado - v1.18), focado em **SEO de ponta a ponta** e **engenharia de software assistida por IA**. O projeto é **construído nas bancadas ZCode (GLM-5.3) e Codex (GPT-6 Astra Ultra)** - os dois agentes desenvolvem; o produto roda no OpenCode. O agente e seus subagentes cobrem **todas as fases de SEO**: inteligência de concorrentes (quem são e o que fazem), keyword research, desenvolvimento de código HTML/CSS/JS, copywriting humanizado e arquitetura de páginas com seções claras e navegáveis que sistemas de IA conseguem entender. Diferente de soluções baseadas em nuvem, este sistema utiliza **Modelos de Linguagem Locais (LLMs via Ollama)**, **roteamento local de tarefas**, e uma **arquitetura de memória híbrida persistente** para fornecer análise de concorrência, geração de conteúdo otimizado, refatoração de código assistida por memória, e debugging recursivo - com **custo marginal de operação** (a infraestrutura local elimina o custo por token de API; busca web e SERPs pagas opcionais continuam exigindo internet).
