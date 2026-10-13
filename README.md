@@ -24,8 +24,10 @@ O [contrato do MVP](docs/SEO-AGENT-MVP.md) registra as decisões atuais.
 Para implementar ou retomar uma tarefa, siga o [processo de execução](docs/EXECUCAO.md):
 entrada por projeto → pesquisa → leitura → análise → outline → revisão humana,
 com histórico e monitoramento diário. A primeira CLI valida projetos e prepara execuções com histórico local; veja
-os [comandos e a configuração](docs/CLI.md). Busca e geração de outlines
-continuam nas próximas tarefas do roteiro.
+os [comandos e a configuração](docs/CLI.md). Também oferece busca via
+[SearXNG local](docs/BUSCA-WEB.md) e inspeção de conteúdo/sinais SEO de páginas.
+[Navegação por jornadas e telas](docs/NAVEGACAO-CONCORRENTES.md), análise por modelo
+e geração de outlines continuam nas próximas tarefas do roteiro.
 
 ## Workflow de desenvolvimento (o diferente deste repo)
 

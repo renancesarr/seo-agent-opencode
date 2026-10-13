@@ -146,5 +146,18 @@ class ProjectCLI(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout), {'project_id': 'unknown', 'runs': []})
         self.assertFalse(store.parent.exists())
 
+    def test_web_commands_reject_invalid_input_without_network_or_traceback(self):
+        for args, message in [
+            (['search', '--query', ' '], 'consulta'),
+            (['search', '--query', 'OpenCode', '--limit', '0'], 'limite'),
+            (['inspect', '--url', 'file:///etc/passwd'], 'http'),
+        ]:
+            with self.subTest(args=args):
+                result = self.invoke(*args)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn(message, result.stderr)
+                self.assertNotIn('Traceback', result.stderr)
+                self.assertEqual(result.stdout, '')
+
 if __name__ == '__main__':
     unittest.main()
