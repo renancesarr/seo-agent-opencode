@@ -7,7 +7,7 @@ pelo `ai-codex` (Codex/GPT-6 Astra Ultra), e vice-versa. `main` é branch humana
 
 ## O que faz
 
-Cobre todas as fases de SEO com subagentes especializados:
+A visão do produto cobre todas as fases de SEO com subagentes especializados:
 
 - **Inteligência de concorrentes** — quem disputa a SERP, o que fazem, quais gaps deixaram
 - **Keyword research & clustering**
@@ -17,6 +17,15 @@ Cobre todas as fases de SEO com subagentes especializados:
 - Refatoração de código assistida por memória de longo prazo e debugging recursivo
 
 A visão completa, arquitetura e roadmap estão no [IDEIA.md](IDEIA.md).
+
+## Desenvolvimento da primeira versão
+
+O [contrato do MVP](docs/SEO-AGENT-MVP.md) registra as decisões atuais.
+Para implementar ou retomar uma tarefa, siga o [processo de execução](docs/EXECUCAO.md):
+entrada por projeto → pesquisa → leitura → análise → outline → revisão humana,
+com histórico e monitoramento diário. A primeira CLI valida projetos e prepara execuções com histórico local; veja
+os [comandos e a configuração](docs/CLI.md). Busca e geração de outlines
+continuam nas próximas tarefas do roteiro.
 
 ## Workflow de desenvolvimento (o diferente deste repo)
 
