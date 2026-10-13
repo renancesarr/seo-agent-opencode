@@ -17,15 +17,4 @@ if ! echo "$head" | grep -qE "$pattern"; then
   echo "  ex.: feat(scraper): adicionar cliente da API JSON do SearXNG"
   exit 1
 fi
-
-# Commits vindos das branches de agente exigem o rodapé Agent:
-branch=$(git rev-parse --abbrev-ref HEAD)
-case "$branch" in
-  zcode-ai)
-    grep -qE '^Agent: zcode' "$msgfile" || {
-      echo "ERRO: commits da zcode-ai exigem o rodapé 'Agent: zcode-ai'"; exit 1; } ;;
-  codex-ai)
-    grep -qE '^Agent: codex' "$msgfile" || {
-      echo "ERRO: commits da codex-ai exigem o rodapé 'Agent: codex-ai'"; exit 1; } ;;
-esac
 exit 0

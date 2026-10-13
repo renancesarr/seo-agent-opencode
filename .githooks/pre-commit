@@ -1,20 +1,35 @@
 #!/usr/bin/env bash
-# Protege branches de integração:
+# Protege branches de integração e exige assinatura do agente:
 # - main: somente humano (GIT_HUMAN=1)
-# - dev-ai: somente merges (branch de review aprovada) ou humano
+# - dev-ai: somente merges (PR aprovado) ou humano
+# - zcode-ai/codex-ai: autor deve assinar como ai-zcode/ai-codex
 branch=$(git rev-parse --abbrev-ref HEAD)
 
 if [ "$branch" = "main" ] && [ "$GIT_HUMAN" != "1" ]; then
   echo "ERRO: 'main' é branch humana - agente não commita aqui."
-  echo "Agentes: trabalhe em zcode-ai/codex-ai e siga o fluxo de review (AGENTS.md)."
+  echo "Agentes: trabalhe em zcode-ai/codex-ai e siga o fluxo de PR (AGENTS.md)."
   echo "Humano: GIT_HUMAN=1 git commit ... (ou --no-verify)."
   exit 1
 fi
 
 if [ "$branch" = "dev-ai" ] && [ "$GIT_HUMAN" != "1" ]; then
   if [ ! -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
-    echo "ERRO: 'dev-ai' só recebe merges de branches code-review/<id> aprovadas."
-    echo "Trabalhe em zcode-ai/codex-ai; o agente oposto revisa; só então o merge (AGENTS.md)."
+    echo "ERRO: 'dev-ai' só recebe merges de PRs aprovados pelo agente oposto."
+    echo "Trabalhe em zcode-ai/codex-ai; o review acontece no PR (AGENTS.md)."
+    exit 1
+  fi
+fi
+
+if [ "$GIT_HUMAN" != "1" ]; then
+  name=$(git config user.name)
+  if [ "$branch" = "zcode-ai" ] && [ "$name" != "ai-zcode" ]; then
+    echo "ERRO: commits na zcode-ai devem ser assinados como ai-zcode:"
+    echo "  git -c user.name=ai-zcode -c user.email=ai-zcode@users.noreply.github.com commit ..."
+    exit 1
+  fi
+  if [ "$branch" = "codex-ai" ] && [ "$name" != "ai-codex" ]; then
+    echo "ERRO: commits na codex-ai devem ser assinados como ai-codex:"
+    echo "  git -c user.name=ai-codex -c user.email=ai-codex@users.noreply.github.com commit ..."
     exit 1
   fi
 fi

@@ -1,40 +1,60 @@
-# AGENTS.md — Executor de Possibilidades (seo-agent-infra)
+# AGENTS.md — Executor de Possibilidades (seo-agent-opencode)
 
 Regras vinculantes para todos os agentes (ZCode/GLM-5.3, Codex/GPT-6 Astra Ultra, OpenCode).
 Os Quatro Princípios Fundamentais (Think Before Coding, Simplicity First, Surgical Changes,
 Goal-Driven Execution) vêm das instruções globais do usuário e continuam valendo aqui.
 
-## Modelo de branches
+## Identidade e assinatura
+
+Cada agente assina tudo o que produz (commits, PRs, issues, reviews):
+
+| Agente | Identidade git (commits) | Assinatura em PR/issue/review |
+|---|---|---|
+| ZCode | `-c user.name=ai-zcode -c user.email=ai-zcode@users.noreply.github.com` | `Signed-by: ai-zcode (GLM-5.3)` |
+| Codex | `-c user.name=ai-codex -c user.email=ai-codex@users.noreply.github.com` | `Signed-by: ai-codex (GPT-6 Astra Ultra)` |
+
+O hook `pre-commit` **exige** a identidade correta na branch correspondente.
+
+## Modelo de branches e review
 
 | Branch | Papel | Quem escreve |
 |---|---|---|
-| `main` | Estável, verificada por humano | **Somente humano** (merge de `dev-ai` após verificação humana) |
-| `dev-ai` | Integração contínua das IAs | Somente **merges de review aprovado** (ou humano) |
+| `main` | Estável, verificada por humano | **Somente humano** (merge de `dev-ai` após verificação) |
+| `dev-ai` | Integração contínua das IAs | **Somente via PR aprovado** pelo agente oposto (ou humano) |
 | `zcode-ai` | Workspace de desenvolvimento do ZCode | ZCode |
 | `codex-ai` | Workspace de desenvolvimento do Codex | Codex |
-| `code-review/<id>-<codou>-<revisor>` | Branch de review cruzado | Criada sob demanda |
 
-> Nota: `:` é caractere inválido em nomes de branch do git, por isso o separador é `/`.
-> Exemplo: `code-review/007-zcode-codex` = trabalho codado por **zcode**, revisado por **codex**.
+O review acontece em **Pull Requests no GitHub** (`zcode-ai`/`codex-ai` → `dev-ai`).
+O número do PR é o identificador do review (substituiu as antigas branches `code-review/<id>`).
 
-## Regras obrigatórias para agentes
+## Fluxo obrigatório
 
-1. **Nunca** commitar, mergear ou reescrever `main`. O merge `dev-ai` → `main` é humano.
-2. Trabalhe **somente na sua branch**: `zcode-ai` (ZCode) ou `codex-ai` (Codex).
-3. Antes de começar qualquer tarefa, sincronize com `dev-ai`:
-   `git checkout <sua-branch> && git merge dev-ai`
-4. Todo commit segue o padrão abaixo e leva o rodapé `Agent: zcode-ai` ou `Agent: codex-ai`.
-5. Para integrar trabalho em `dev-ai`, abra uma branch de review a partir da sua branch:
-   `git checkout -b code-review/<id>-<codou>-<revisor>`
-   `<id>` é sequencial (001, 002, ...) ou o número da tarefa/issue.
-6. **Quem codou não revisa.** O agente oposto faz o code review na branch de review,
-   usando o checklist abaixo, e registra o veredito (aprovado / reprovações) no corpo
-   do merge ou em `docs/reviews/<id>.md`.
-7. Review **aprovado** → o revisor mergeia em `dev-ai`:
-   `git checkout dev-ai && git merge --no-ff code-review/<id>-<codou>-<revisor>`
-   Review **reprovado** → revisor documenta os problemas; o autor corrige na branch de
-   origem e reabre (novo id ou mesmo id com sufixo `-r2`).
-8. Nunca use `--no-verify`, nunca desative hooks, nunca faça push --force em branches compartilhadas.
+1. **Sincronize** antes de começar qualquer tarefa:
+   `git checkout <sua-branch> && git merge origin/dev-ai`
+2. **Desenvolva** somente na sua branch, com commits no padrão abaixo e assinados
+   com a sua identidade (`-c user.name=... -c user.email=...`).
+3. **Abra o PR** para `dev-ai`:
+   ```bash
+   git push origin <sua-branch>
+   gh pr create --base dev-ai --head <sua-branch> \
+     --title "[ai-zcode] resumo curto" \
+     --body-file .github/PULL_REQUEST_TEMPLATE.md
+   ```
+   (Codex usa `[ai-codex]`; complete o corpo do template com o que fez e como verificou.)
+4. **Review cruzado — quem codou não revisa.** O agente oposto revisa o PR:
+   ```bash
+   gh pr diff <n>            # ler a mudança
+   gh pr review <n> --request-changes --body "problemas encontrados... Signed-by: ..."
+   gh pr review <n> --approve --body "LGTM. Signed-by: ai-codex (GPT-6 Astra Ultra)"
+   ```
+   Use o checklist do template; register reprovações concretas e acionáveis.
+5. **Aprovado → merge** (o revisor executa):
+   `gh pr merge <n> --merge`
+   Reprovado → o autor corrige na sua branch, push, e o PR reentra para novo review.
+6. **Issues**: criar com `gh issue create`, título claro e corpo com contexto +
+   rodapé `Signed-by: <agente> (modelo)`.
+7. **Nunca**: commitar/mergear em `main` (agente), usar `--no-verify`, desativar
+   hooks, ou fazer push --force em branches compartilhadas.
 
 ## Padrão de commit
 
@@ -43,9 +63,7 @@ Goal-Driven Execution) vêm das instruções globais do usuário e continuam val
 
 [corpo opcional: o quê e por quê]
 
-[rodapés]
-Agent: zcode-ai | codex-ai
-Refs: code-review/<id> (quando houver)
+[rodapé opcional: Refs: #<nº do PR>]
 ```
 
 Tipos: `feat` `fix` `docs` `style` `refactor` `perf` `test` `build` `ci` `chore` `seo`
@@ -57,7 +75,8 @@ Exemplos:
 
 ## Checklist de code review (revisor deve verificar tudo)
 
-- [ ] Commits seguem o padrão e trazem o rodapé `Agent:` correto
+- [ ] Commits assinados com a identidade correta (ai-zcode / ai-codex)
+- [ ] Mensagens seguem o padrão
 - [ ] Diff mínimo e cirúrgico: toda linha mudada traça diretamente à tarefa
 - [ ] Sem overengineering: nada especulativo, sem abstração para uso único (Simplicity First)
 - [ ] Nenhuma "melhoria" em código adjacente não solicitada (Surgical Changes)
@@ -66,6 +85,8 @@ Exemplos:
 
 ## Enforcement
 
-- Hook `commit-msg` valida o padrão de mensagem (merges são isentos).
-- Hook `pre-commit` bloqueia commits de agente em `main` e commits não-merge em `dev-ai`.
-  Humano: use `GIT_HUMAN=1 git commit ...` quando precisar escrever nessas branches.
+- Hook `pre-commit`: bloqueia agente em `main`, commit não-merge em `dev-ai`, e
+  commits sem a identidade assinada correta em `zcode-ai`/`codex-ai`.
+  Humano: prefixe `GIT_HUMAN=1` quando precisar escrever nessas branches.
+- Hook `commit-msg`: valida o padrão de mensagem (merges são isentos).
+- GitHub: proteção de branch em `main`/`dev-ai` (a configurar quando houver token).
