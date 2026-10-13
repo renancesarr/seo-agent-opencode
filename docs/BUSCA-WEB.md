@@ -33,7 +33,9 @@ docker compose -p seo-agent-web up -d searxng
 docker compose -p seo-agent-web ps
 ```
 
-`.env` é ignorado pelo Git. `.env.example` contém apenas o nome da variável.
+`.env` é ignorado pelo Git. `.env.example` contém os campos de configuração,
+sem valores reais; [CHAVES-BUSCADORES.md](CHAVES-BUSCADORES.md) explica como obter
+as credenciais, carregar o ambiente e distinguir integrações prontas das futuras.
 Uma chave ausente ou vazia impede o Compose de iniciar. Use `config --quiet`;
 a saída completa de `docker compose config` expõe valores interpolados.
 
@@ -111,6 +113,36 @@ Não é uma reprodução completa do Web Check: não atribui pontuação Lightho
 Core Web Vitals, ranking Tranco ou resultado de auditoria sem executar a
 respectiva medição. Falhas, limites de coleta e páginas não lidas devem ficar
 explícitos no resultado.
+
+## Busca batch e provedores
+
+`search-batch` executa consultas completas em sequência, espera 300 segundos
+entre elas (configurável) e grava grupos por domínio com `urli`, `searches` e
+`buscador`. Ele visita cada URL única uma vez, ignora fragmentos e normaliza
+`www.` somente para agrupamento por domínio. URLs finais repetidas também são
+deduplicadas. Só páginas com status HTTP 200 entram no JSON; falhas
+de rede e demais status são omitidos. Essa execução não usa robots.txt, conforme
+o escopo explícito deste lote. Para nove consultas, há oito esperas, totalizando
+40 minutos, além do tempo de busca e leitura.
+
+O lote seleciona automaticamente os adaptadores de Brave, Google CSE, Yandex,
+Mojeek, Kagi, You.com, SerpApi, Serper e DataForSEO cujas credenciais estão
+completas no `.env`/ambiente. Campos ausentes não geram chamadas. APIs falhas
+são registradas em um arquivo auxiliar e as demais continuam. Consulte a
+[configuração de credenciais](CHAVES-BUSCADORES.md) e os [comandos](CLI.md).
+DDG Instant Answers não equivale a uma API
+de resultados completos; o Bing Search API foi aposentado em 2025; o Google
+Custom Search JSON API não aceita novos clientes; e a API de busca do Yandex é
+paga. Portanto, esses serviços não são apresentados como integrações gratuitas
+genéricas. O SearXNG segue como opção principal e informa os mecanismos que
+forneceram cada resultado. A chave da Brave nunca é gravada na saída.
+
+Fontes oficiais sobre disponibilidade e custos dos provedores:
+[Brave Search API](https://brave.com/search/api/), [Brave quickstart](https://api-dashboard.search.brave.com/documentation/quickstart),
+[aposentadoria do Bing Search API](https://learn.microsoft.com/en-us/lifecycle/announcements/bing-search-api-retirement),
+[Google Custom Search JSON API](https://developers.google.com/custom-search/v1/overview),
+[preços da Yandex Search API](https://aistudio.yandex.ru/en/docs/search-api/pricing) e
+[DuckDuckGo Instant Answers](https://duckduckgo.com/duckduckgo-help-pages/features/instant-answers-and-other-features).
 
 ## Fontes oficiais
 

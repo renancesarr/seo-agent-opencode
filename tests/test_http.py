@@ -117,6 +117,23 @@ class HTTPFetch(unittest.TestCase):
             fetch_url('http://127.0.0.1:8080/search?q=plants', allow_private=True)
         self.assertEqual(self.socket.call_count, 2)
 
+    def test_restricted_headers_are_never_forwarded_across_redirects(self):
+        self.reply(status='302 Found', headers=[('Location', 'http://other.example/search')])
+        with self.assertRaisesRegex(ValueError, 'cabeçalhos restritos'):
+            fetch_url('http://api.search.brave.com/res/v1/web/search',
+                      headers={'X-Subscription-Token': 'secret'})
+        self.assertEqual(self.socket.call_count, 1)
+
+    def test_posts_json_with_credentials_and_never_replays_on_redirect(self):
+        connection = self.reply(status='307 Temporary Redirect', headers=[('Location', '/other')])
+        with self.assertRaisesRegex(ValueError, 'redirecion'):
+            fetch_url('http://example.org/search', method='POST', body=b'{"q":"igrejas"}',
+                      headers={'Authorization': 'Bearer key', 'Content-Type': 'application/json'})
+        wire = b''.join(call.args[0] for call in connection.sendall.call_args_list)
+        self.assertIn(b'POST /search HTTP/1.1', wire)
+        self.assertTrue(wire.endswith(b'{"q":"igrejas"}'))
+        self.assertEqual(self.socket.call_count, 1)
+
     def test_stops_after_five_redirects(self):
         for index in range(6):
             self.reply(status='302 Found', headers=[('Location', f'/page{index}')])

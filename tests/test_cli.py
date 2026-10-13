@@ -6,6 +6,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import os
+import io
+from contextlib import redirect_stdout, redirect_stderr
+from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -161,6 +166,47 @@ class ProjectCLI(unittest.TestCase):
                 self.assertIn(message, result.stderr)
                 self.assertNotIn('Traceback', result.stderr)
                 self.assertEqual(result.stdout, '')
+
+    def test_batch_without_credentials_stops_before_starting_search_cycle(self):
+        queries = self.directory / 'queries.json'
+        queries.write_text('["igrejas"]', encoding='utf-8')
+        env_file = self.directory / '.env'
+        env_file.write_text('BRAVE_SEARCH_API_KEY=\nGOOGLE_SEARCH_API_KEY=partial\n', encoding='utf-8')
+        output = self.directory / 'result.json'
+        with patch.dict(os.environ, {}, clear=True):
+            result = self.invoke('search-batch', '--queries-file', str(queries), '--env-file', str(env_file),
+                                 '--output', str(output), '--no-searxng')
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('Nenhum provedor', result.stderr)
+        self.assertFalse(output.exists())
+        self.assertNotIn('Traceback', result.stderr)
+
+    def test_batch_automatically_uses_file_keys_and_saves_results_after_one_api_fails(self):
+        from seo_agent.__main__ import main
+        queries = self.directory / 'queries.json'
+        queries.write_text('["igrejas", "igrejas católicas"]', encoding='utf-8')
+        env_file = self.directory / '.env'
+        env_file.write_text('BRAVE_SEARCH_API_KEY=brave-secret\nSERPER_API_KEY=serper-secret\n', encoding='utf-8')
+        output = self.directory / 'result.json'
+        def fetch(url, **options):
+            if url.startswith('https://google.serper.dev/'):
+                return SimpleNamespace(status=401, text=lambda: 'serper-secret')
+            if url.startswith('https://api.search.brave.com/'):
+                return SimpleNamespace(status=200, text=lambda: json.dumps({'web': {'results': [
+                    {'url': 'https://example.org/ficha', 'title': 'Ficha'}]}}))
+            return SimpleNamespace(url=url, status=200)
+        args = ['seo_agent', 'search-batch', '--queries-file', str(queries), '--env-file', str(env_file),
+                '--output', str(output), '--no-searxng', '--interval-seconds', '0']
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with patch.dict(os.environ, {}, clear=True), patch.object(sys, 'argv', args), \
+                patch('seo_agent.http.fetch_url', fetch), redirect_stdout(stdout), redirect_stderr(stderr):
+            main()
+        self.assertEqual(json.loads(output.read_text()), [{'domain': 'example.org', 'urli': [
+            {'title': 'Ficha', 'url': 'https://example.org/ficha'}],
+            'searches': ['igrejas', 'igrejas católicas'], 'buscador': ['brave']}])
+        errors = json.loads(output.with_name(output.name + '.errors.json').read_text())
+        self.assertEqual([error['provider'] for error in errors], ['serper', 'serper'])
+        self.assertNotIn('secret', output.read_text() + stderr.getvalue())
 
 if __name__ == '__main__':
     unittest.main()

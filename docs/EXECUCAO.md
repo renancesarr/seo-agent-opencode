@@ -7,8 +7,8 @@ entrega uma capacidade verificável da ferramenta genérica.
 
 Estado em 13/10/2026: T00–T02 integradas em dev-ai pelo PR #5. A CLI valida
 projetos e preserva execuções preparadas. T04A acrescenta busca real e inspeção
-SEO; sua verificação está abaixo. Integração por modelo/OpenCode, navegação
-em browser, outlines e monitoramento ainda estão pendentes.
+SEO; sua verificação está abaixo. T04N foi integrada pelo PR #7. Integração por
+modelo/OpenCode, outlines e monitoramento ainda estão pendentes.
 
 O watcher de PRs pertence ao desenvolvimento. O agendador diário do produto
 SEO é uma capacidade separada, a implementar em T05.
@@ -47,7 +47,8 @@ antes de considerá-los prontos para integração.
 | T01 | Verificar integração disponível no OpenCode e definir contrato técnico mínimo | T00 | integrada |
 | T02 | Configuração de projeto e estrutura de execução genérica | T01 | integrada |
 | T04A | Busca web, leitura de HTML e inspeção SEO | T02 | integrada |
-| T04N | Navegação, jornadas observadas e comparação por tela | T04A | verificada localmente |
+| T04N | Navegação, jornadas observadas e comparação por tela | T04A | integrada |
+| T04P | Busca batch com APIs selecionadas por credenciais | T04A | verificada localmente |
 | T03 | Fluxo manual completo com fontes simuladas, histórico e revisão | T04A | pendente |
 | T04B | Integrar coleta e geração de outlines pelo OpenCode | T03 | pendente |
 | T05 | Monitoramento diário, comparação e avisos | T04B | pendente |
@@ -99,6 +100,17 @@ cliques em links visíveis, verificação de destino e comparação desktop/mobi
 Jev/Donut são candidatos, não integrações prontas. O agendamento segue em T05.
 Verificação: fixture local com JS e fluxo reproduzível, evidências de desktop e
 mobile e smoke real com o Chromium local.
+
+### T04P — Busca batch com APIs por credenciais
+
+O incremento T04P foi priorizado pelo usuário antes de T03: adaptar Brave,
+Google CSE, Yandex, Mojeek, Kagi, You.com, SerpApi, Serper e DataForSEO. Aceite:
+credenciais ausentes/incompletas não entram no ciclo; configuradas fazem a
+requisição correta; falha não impede as demais; manter apenas páginas HTTP 200
+e URLs únicas, com consultas e buscadores, esperando cinco minutos entre
+consultas completas. Verificação: adaptadores com HTTP controlado, agendador
+com espera injetada e CLI com arquivos temporários; smoke real após chaves
+elegíveis. O [backlog B01](BACKLOG.md) registra o experimento futuro Kitesurf.
 
 ### T03 — Fluxo manual com evidências controladas
 
@@ -198,8 +210,9 @@ T04A — integrada em `dev-ai` pelo
 - Smoke tests técnicos, sem pesquisa do piloto comercial, execução de LLM ou
   publicação. O serviço SearXNG ficou disponível em `127.0.0.1:8080`.
 
-T04N — verificada localmente em 13/10/2026 na branch `codex-ai`, commit
-`1fdc8ca`; falta abrir o PR para `dev-ai` e receber revisão cruzada:
+T04N — integrada em `dev-ai` pelo
+[PR #7](https://github.com/renancesarr/seo-agent-opencode/pull/7), merge `027c646`;
+verificada localmente em 13/10/2026 na branch `codex-ai`, commit `1fdc8ca`:
 
 - Suíte completa: 48 testes passaram, incluindo fixture local com conteúdo
   dinâmico, clique e validação do link interno, bloqueio de POST e origem externa.
@@ -213,7 +226,36 @@ T04N — verificada localmente em 13/10/2026 na branch `codex-ai`, commit
 - Não acessa sessões, analytics ou histórias reais de usuários. T05 ainda cobre
   execução diária; fluxo por projeto, análise por LLM e outlines continuam pendentes.
 
-Próxima tarefa: T03, fluxo manual com evidências controladas. A implementação
-T04N ainda não está integrada em `dev-ai`.
+Configuração de provedores — verificada localmente em 13/10/2026, por
+solicitação do usuário antes de T03:
+
+- `.env.example` contém 13 campos vazios; `.env` local atualizado com campos
+  ausentes, preservando valores existentes, permissão `0600` e exclusão do Git.
+- [CHAVES-BUSCADORES.md](CHAVES-BUSCADORES.md) documenta credenciais, cobertura
+  brasileira, disponibilidade das APIs e adaptadores ainda pendentes.
+- `bash -n .env` e `bash -n .env.example` passaram; campos, ausência de valores
+  reais no exemplo, links locais e `git diff --check` verificados.
+- Nenhuma chave externa obtida ou validada com chamada real nesta configuração.
+
+T04P — verificada localmente em 13/10/2026 na branch `codex-ai`:
+
+- `python3 -B -m unittest discover -s tests -v`: 72 testes, 71 aprovados e
+  um smoke opcional de Chromium pulado nesta execução por dependência ausente.
+- Ciclos red→green para seleção por credenciais, nove contratos HTTP de APIs,
+  POST autenticado, carregamento de `.env`, continuidade após falha e
+  deduplicação de redirecionamentos entre consultas.
+- CLI verificada com chaves fictícias e HTTP controlado: saída JSON com apenas
+  páginas HTTP 200; erros preservados em arquivo auxiliar sem credenciais.
+  Sem provedores/chaves, saída 2 antes do ciclo. Espera padrão de 300 segundos
+  entre consultas completas, com relógio/espera substituídos nos testes.
+- Sintaxe Python, arquivos de ambiente, links locais e `git diff --check`
+  aprovados; `.env` permanece ignorado e com permissão `0600`.
+- Nenhuma consulta real às nove APIs nem execução remota Kitesurf nesta etapa.
+  Chaves e elegibilidade ainda serão configuradas; registrar smoke por provedor
+  depois disso. B01 permanece pendente no [BACKLOG.md](BACKLOG.md).
+- Revisão cruzada e integração em `dev-ai` ainda pendentes.
+
+Próxima tarefa: T03, fluxo manual com evidências controladas. T04P aguarda
+revisão cruzada; o experimento Kitesurf continua no backlog B01.
 
 Signed-by: ai-codex (GPT-6 Astra Ultra)
