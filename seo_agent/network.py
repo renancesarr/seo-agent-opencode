@@ -11,6 +11,11 @@ COMPACT_TERMS_LIMIT = 20
 COMPACT_LINKS_LIMIT = 20
 
 
+def normalize_term(heading):
+    """Critério único de termo/tema: texto do heading normalizado em minúsculas."""
+    return ' '.join((heading.get('text') or '').split()).lower()
+
+
 def build_network(project_id, runs, store):
     """Deriva a rede da extração registrada mais recente, sem LLM e sem rede.
 
@@ -37,7 +42,7 @@ def build_network(project_id, runs, store):
     for url, extraction in sorted(pages.items()):
         page = extraction.get('page') or {}
         for heading in page.get('headings') or []:
-            term = ' '.join((heading.get('text') or '').split()).lower()
+            term = normalize_term(heading)
             if not term:
                 continue
             terms.setdefault(term, set()).add(url)

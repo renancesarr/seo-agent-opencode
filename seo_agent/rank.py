@@ -123,7 +123,8 @@ def _themes(valid, score_by_url):
         if url not in score_by_url:
             continue
         for heading in (extraction.get('page') or {}).get('headings') or []:
-            term = ' '.join((heading.get('text') or '').split()).lower()
+            from seo_agent.network import normalize_term
+            term = normalize_term(heading)
             if term:
                 sources.setdefault(term, set()).add(url)
     themes = [{'term': term, 'score': sum(score_by_url[url] for url in urls),
