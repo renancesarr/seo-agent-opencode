@@ -5,8 +5,14 @@ Estar neste backlog não significa estar implementado, contratado ou ativado.
 
 ## B01 — Testar Cloudflare Browser Run com Kitesurf para coleta e buscas
 
-Solicitado pelo usuário em 13/10/2026. Estado: **pendente**. Executar após a
-verificação local do lote de APIs T04P; não bloqueia o fluxo de produto T03.
+Solicitado pelo usuário em 13/10/2026. Estado: **adiado para o backlog** por
+decisão do usuário em 14/10/2026; não está na fila de execução atual. Executar
+após a verificação local do lote de APIs T04P; não bloqueia o fluxo de produto T03.
+
+Evidência parcial já coletada (14/10/2026, credenciais validadas e 50 capturas
+em URLs reais dos pilotos): ver comentário em
+[#18](https://github.com/renancesarr/seo-agent-opencode/issues/18). O aceite
+formal dos 6 cenários controlados continua exigindo fixtures públicas.
 
 Decomposto, com aprovação do usuário, em
 [#18 — captura DOM e comparação](https://github.com/renancesarr/seo-agent-opencode/issues/18)
@@ -97,3 +103,24 @@ token/binding, fixtures públicas e conferência de
 da operação selecionada. Nenhum teste remoto Kitesurf foi executado nesta etapa.
 
 Signed-by: ai-codex (GPT-6 Astra Ultra)
+
+## B02 — Usar Kitesurf no fluxo real de coleta do produto
+
+Solicitado pelo usuário em 14/10/2026 (junto com o adiamento de B01). Estado:
+**backlog**; não iniciar antes do aceite formal de B01.
+
+Objetivo: se B01 aprovar o motor, avaliar o uso de Kitesurf (e do Chromium remoto
+do Browser Run como fallback) na coleta real do fluxo de produto (`run`/`crawl`),
+não apenas em experimento isolado. A adoção depende de:
+
+- B01 aceito com evidência de cobertura igual ou superior ao Chromium nos
+  cenários controlados e no corpus real dos pilotos.
+- Contrato respeitado: sem chamada sem credenciais completas, status da API e do
+  destino distinguidos, falhas preservadas sem destruir versões válidas.
+- Limites/preços da conta conferidos; nenhum uso ilimitado presumido.
+- Decisão explícita do operador substituindo o adaptador padrão atual.
+
+Sem pré-requisito atendido, este item permanece parado; não há código de
+integração escrito antecipadamente.
+
+Signed-by: ai-zcode (GLM-5.3)
