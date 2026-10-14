@@ -4,23 +4,11 @@ from datetime import datetime, UTC
 from uuid import uuid4
 
 
-NO_EXTRACTION_MESSAGE = ('Nenhuma extração registrada no histórico deste projeto; '
-                         'execute o comando extract antes de construir a rede.')
-NO_SOURCES_YET_MESSAGE = ('Nenhuma URL coletada no histórico deste projeto; '
-                          'execute a busca (comando run) e depois o extract antes de '
-                          'construir a rede.')
 NO_NETWORK_MESSAGE = ('Nenhuma rede registrada no histórico deste projeto; '
                       'execute o comando network build antes de consultar.')
 
 COMPACT_TERMS_LIMIT = 20
 COMPACT_LINKS_LIMIT = 20
-
-
-def latest_extraction(runs):
-    for run in reversed(runs):
-        if (run.get('result') or {}).get('extractions') is not None:
-            return run
-    return None
 
 
 def build_network(project_id, runs, store):
@@ -30,16 +18,8 @@ def build_network(project_id, runs, store):
     termos dos headings) com a URL-fonte em cada fato; URL com falha de extração
     fica fora da rede, com a falha registrada, sem derrubar as demais.
     """
-    extraction_run = latest_extraction(runs)
-    if extraction_run is None:
-        has_sources = any((run.get('result') or {}).get('sources')
-                          for run in runs)
-        raise ValueError(NO_EXTRACTION_MESSAGE if has_sources else NO_SOURCES_YET_MESSAGE)
-    extractions = extraction_run['result']['extractions']
-    valid = [extraction for extraction in extractions if not extraction.get('failures')]
-    excluded = sorted(({'url': extraction['url'], 'failures': extraction['failures']}
-                       for extraction in extractions if extraction.get('failures')),
-                      key=lambda item: item['url'])
+    from seo_agent.extract import extraction_inputs
+    extraction_run, valid, excluded = extraction_inputs(runs, purpose='construir a rede')
     pages = {extraction['url']: extraction for extraction in valid}
     entities = [{'type': 'page', 'id': url, 'source_id': extraction.get('source_id'),
                  'retrieved_at': extraction.get('retrieved_at'), 'sources': [url]}

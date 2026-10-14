@@ -8,6 +8,37 @@ NO_SOURCES_MESSAGE = ('Nenhuma URL coletada no histórico deste projeto; '
                       'execute a busca (comando run) antes de extrair.')
 
 
+def latest_extraction(runs):
+    for run in reversed(runs):
+        if (run.get('result') or {}).get('extractions') is not None:
+            return run
+    return None
+
+
+def extraction_inputs(runs, *, purpose):
+    """Guarda comum dos consumidores da extração (rede, palavras-chave).
+
+    Devolve (execução de extração mais recente, extrações válidas, excluídas)
+    ou levanta erro acionável apontando o próximo passo: `extract` quando o
+    projeto já tem URLs coletadas; a busca (`run`) quando ainda não tem.
+    `purpose` nomeia a ação em andamento nas mensagens.
+    """
+    extraction_run = latest_extraction(runs)
+    if extraction_run is None:
+        has_sources = any((run.get('result') or {}).get('sources') for run in runs)
+        if has_sources:
+            raise ValueError('Nenhuma extração registrada no histórico deste projeto; '
+                             f'execute o comando extract antes de {purpose}.')
+        raise ValueError('Nenhuma URL coletada no histórico deste projeto; execute a busca '
+                          f'(comando run) e depois o extract antes de {purpose}.')
+    extractions = extraction_run['result']['extractions']
+    valid = [extraction for extraction in extractions if not extraction.get('failures')]
+    excluded = sorted(({'url': extraction['url'], 'failures': extraction['failures']}
+                       for extraction in extractions if extraction.get('failures')),
+                      key=lambda item: item['url'])
+    return extraction_run, valid, excluded
+
+
 def extract_source(url, source):
     page = source.get('page')
     extraction = {'url': url, 'source_id': source.get('id'), 'retrieved_at': source.get('retrieved_at'),

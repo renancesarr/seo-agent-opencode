@@ -7,11 +7,6 @@ import re
 from uuid import uuid4
 
 
-NO_EXTRACTION_MESSAGE = ('Nenhuma extração registrada no histórico deste projeto; '
-                         'execute o comando extract antes de descobrir palavras-chave.')
-NO_SOURCES_YET_MESSAGE = ('Nenhuma URL coletada no histórico deste projeto; execute a busca '
-                          '(comando run) e depois o extract antes de descobrir palavras-chave.')
-
 DEFAULT_LIMIT = 50
 MIN_NGRAM_OCCURRENCES = 2
 MIN_COOCCURRENCE_PAGES = 2
@@ -64,18 +59,10 @@ def discover_keywords(project_id, runs, store, *, limit=DEFAULT_LIMIT):
     origem; termo sem fonte no corpus não existe. URL com falha na extração
     fica fora da descoberta, com a falha registrada, sem derrubar as demais.
     """
-    from seo_agent.network import latest_extraction
-    extraction_run = latest_extraction(runs)
-    if extraction_run is None:
-        has_sources = any((run.get('result') or {}).get('sources') for run in runs)
-        raise ValueError(NO_EXTRACTION_MESSAGE if has_sources else NO_SOURCES_YET_MESSAGE)
     if limit < 0:
         raise ValueError('O limite de termos não pode ser negativo.')
-    extractions = extraction_run['result']['extractions']
-    valid = [extraction for extraction in extractions if not extraction.get('failures')]
-    excluded = sorted(({'url': extraction['url'], 'failures': extraction['failures']}
-                       for extraction in extractions if extraction.get('failures')),
-                      key=lambda item: item['url'])
+    from seo_agent.extract import extraction_inputs
+    extraction_run, valid, excluded = extraction_inputs(runs, purpose='descobrir palavras-chave')
     project_keywords = _latest_project_keywords(runs)
     covered = {_normalized_keyword(keyword) for keyword in project_keywords}
     ngram_occurrences = Counter()
