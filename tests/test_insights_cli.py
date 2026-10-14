@@ -232,6 +232,50 @@ class InsightsCLI(unittest.TestCase):
         self.assertEqual(record['status'], 'generated')
         self.assertEqual(record['result']['insights'], self.insights())
 
+    def test_without_generator_delivers_aggregates_and_records_missing_insights(self):
+        self.build_pipeline()
+        record = self.invoke('insights', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(record['status'], 'no_model')
+        self.assertNotIn('insights', record['result'])
+        self.assertIn('rede compacta e as análises disponíveis', record['result']['message'])
+        self.assertEqual(record['result']['knowledge']['network']['counts']['pages'], 2)
+        self.assertEqual(record['result']['knowledge']['missing_analyses'], [])
+        runs = self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']
+        self.assertEqual(runs[-1], record)
+
+    def test_missing_analyses_are_informed_pendings_not_blockers(self):
+        self.record_extraction(self.extracted_sources())
+        self.invoke('network', 'build', '--project-id', 'horta', '--store', str(self.store))
+        record = self.invoke('insights', '--project-id', 'horta', '--store', str(self.store),
+                             generate=lambda project, result: self.insights())
+        self.assertEqual(record['status'], 'generated')
+        knowledge = record['result']['knowledge']
+        self.assertEqual(list(knowledge), ['network', 'missing_analyses'])
+        self.assertEqual(knowledge['missing_analyses'], ['keywords', 'classify', 'rank'])
+        self.assertIsNone(record['result']['keywords_run_id'])
+        self.assertIsNone(record['result']['classify_run_id'])
+        self.assertIsNone(record['result']['rank_run_id'])
+
+    def test_analyses_from_another_extraction_epoch_are_not_mixed(self):
+        self.record_extraction(self.extracted_sources())
+        self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))
+        self.record_extraction(self.extracted_sources())
+        self.invoke('network', 'build', '--project-id', 'horta', '--store', str(self.store))
+        record = self.invoke('insights', '--project-id', 'horta', '--store', str(self.store),
+                             generate=lambda project, result: self.insights())
+        self.assertIsNone(record['result']['rank_run_id'])
+        self.assertNotIn('rankings', record['result']['knowledge'])
+        self.assertIn('rank', record['result']['knowledge']['missing_analyses'])
+
+    def test_knowledge_over_same_history_is_deterministic(self):
+        self.build_pipeline()
+        first = self.invoke('insights', '--project-id', 'horta', '--store', str(self.store),
+                            generate=lambda project, result: self.insights())
+        second = self.invoke('insights', '--project-id', 'horta', '--store', str(self.store),
+                             generate=lambda project, result: self.insights())
+        self.assertEqual(first['result']['knowledge'], second['result']['knowledge'])
+        self.assertNotEqual(first['run_id'], second['run_id'])
+
 
 if __name__ == '__main__':
     unittest.main()
