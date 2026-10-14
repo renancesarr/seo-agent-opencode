@@ -71,6 +71,49 @@ class ExtractCLI(unittest.TestCase):
         self.assertEqual(result['status'], 'no_sources')
         self.assertFalse(self.store.exists())
 
+    def test_extracts_all_deterministic_signals_per_url_and_preserves_execution(self):
+        collected = self.collect()
+        source = collected['result']['sources'][0]
+        record = self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(record['status'], 'extracted')
+        self.assertEqual(record['project_id'], 'horta')
+        self.assertNotEqual(record['run_id'], collected['run_id'])
+        self.assertTrue(record['created_at'])
+        [extraction] = record['result']['extractions']
+        self.assertEqual(extraction['url'], 'https://example.org/guide')
+        self.assertEqual(extraction['source_id'], source['id'])
+        self.assertEqual(extraction['retrieved_at'], source['retrieved_at'])
+        self.assertEqual(extraction['failures'], [])
+        page = extraction['page']
+        self.assertEqual(page['title'], 'Guia de hortas')
+        self.assertEqual(page['description'], 'Cultive em casa.')
+        self.assertEqual(page['language'], 'pt-BR')
+        self.assertEqual(page['canonical'], 'https://example.org/guide')
+        self.assertEqual(page['headings'], [{'level': 1, 'text': 'Horta em casa'}])
+        self.assertIn('Cultive alimentos em vasos.', page['text'])
+        self.assertEqual(page['authors'], [
+            {'source': 'meta:author', 'value': 'Maria Silva'},
+            {'source': 'json_ld:author', 'value': 'Maria Silva'},
+        ])
+        self.assertEqual(page['dates'], [
+            {'source': 'meta:article:published_time', 'value': '2026-01-15T08:00:00+00:00'},
+            {'source': 'time', 'value': '2026-01-15'},
+            {'source': 'json_ld:datePublished', 'value': '2026-01-15'},
+        ])
+        self.assertEqual(page['links'], [
+            {'url': 'https://example.org/plantar', 'text': 'Como plantar', 'rel': [], 'internal': True},
+        ])
+        self.assertEqual(page['images'], [
+            {'src': 'https://example.org/vasos.jpg', 'alt': 'Vasos de plantas'},
+        ])
+        self.assertEqual(page['structured_data'], [
+            {'@type': 'Article', 'datePublished': '2026-01-15',
+             'author': {'@type': 'Person', 'name': 'Maria Silva'}},
+        ])
+        self.assertEqual(page['social'], {'og:title': 'Guia de hortas'})
+        runs = self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']
+        self.assertEqual(runs, [collected, record])
+
 
 if __name__ == '__main__':
     unittest.main()
