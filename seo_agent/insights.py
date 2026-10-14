@@ -1,6 +1,7 @@
 """Insights por LLM sobre a rede compacta do corpus, nunca páginas cruas."""
 
 from datetime import datetime, UTC
+import json
 from uuid import uuid4
 
 
@@ -82,6 +83,65 @@ def build_knowledge(network_run, runs):
     return knowledge, origins
 
 
+def _anchors(network_run, knowledge):
+    """Conjuntos que ancoram os insights: páginas da rede e termos do corpus.
+
+    Termos válidos são os da rede (headings normalizados) mais os descobertos
+    pela análise de keywords, quando presente — todos com fonte no corpus.
+    """
+    network = network_run['result']['network']
+    terms = {entity['id'] for entity in network['entities'] if entity['type'] == 'term'}
+    terms |= {item['term'] for item in knowledge.get('keywords', {}).get('discovered', [])}
+    return {'urls': {entity['id'] for entity in network['entities'] if entity['type'] == 'page'},
+            'terms': terms}
+
+
+def _validate_item(item, field, anchors):
+    if not isinstance(item, dict):
+        raise ValueError(f'Item de {field} deve ser um objeto.')
+    for text_field in ('description', 'justification'):
+        if not isinstance(item.get(text_field), str) or not item[text_field].strip():
+            raise ValueError(f'Item de {field} exige {text_field} não vazio.')
+    if item.get('kind') not in {'observation', 'hypothesis'}:
+        raise ValueError(f'Item de {field} deve identificar observation ou hypothesis.')
+    references = item.get('references')
+    if (not isinstance(references, list)
+            or any(not isinstance(reference, str) or reference not in anchors['urls'] for reference in references)):
+        raise ValueError('Referência não corresponde às páginas do corpus desta rede.')
+    terms = item.get('terms')
+    if (not isinstance(terms, list)
+            or any(not isinstance(term, str) or term not in anchors['terms'] for term in terms)):
+        raise ValueError('Termo não corresponde aos termos do corpus desta rede.')
+    if item['kind'] == 'observation' and not references and not terms:
+        raise ValueError(f'Observação de {field} exige âncora no corpus (referência ou termo).')
+
+
+def validate_insights(insights, anchors):
+    """Contrato anti-invenção dos insights (precedente: `outlines.validate_proposal`).
+
+    `existing`, `gaps` e `priorities` são listas de itens `{description,
+    justification, kind, references, terms}`; toda referência deve ser URL de
+    página do corpus desta rede e todo termo deve existir na rede ou na
+    descoberta de keywords. Observação exige ao menos uma âncora; hipótese pode
+    não ter. Devolve cópia normalizada em JSON puro.
+    """
+    if isinstance(insights, str):
+        insights = json.loads(insights)
+    if not isinstance(insights, dict):
+        raise ValueError('Insights devem ser um objeto JSON.')
+    for field in ('existing', 'gaps', 'priorities', 'pending'):
+        if not isinstance(insights.get(field), list):
+            raise ValueError(f'Insights exigem lista {field}.')
+    if not any(insights[field] for field in ('existing', 'gaps', 'priorities')):
+        raise ValueError('Insights exigem ao menos um item em existing, gaps ou priorities.')
+    if any(not isinstance(item, str) or not item.strip() for item in insights['pending']):
+        raise ValueError('Pendências devem ser textos não vazios.')
+    for field in ('existing', 'gaps', 'priorities'):
+        for item in insights[field]:
+            _validate_item(item, field, anchors)
+    return json.loads(json.dumps(insights, ensure_ascii=False, allow_nan=False))
+
+
 def generate_insights(project_id, runs, store, generate=None):
     network_run = insights_inputs(runs)
     knowledge, origins = build_knowledge(network_run, runs)
@@ -93,8 +153,15 @@ def generate_insights(project_id, runs, store, generate=None):
         record['status'] = 'no_model'
         result['message'] = NO_GENERATOR_MESSAGE
     else:
-        result['insights'] = generate(project, result)
-        record['status'] = 'generated'
+        try:
+            result['insights'] = validate_insights(generate(project, result), _anchors(network_run, knowledge))
+        except (OSError, ValueError, TypeError):
+            result['insights'] = None
+            result['errors'] = [{'stage': 'generation', 'error': 'Insights inválidos ou gerador '
+                                                                 'indisponível; conferir estrutura, referências e termos.'}]
+            record['status'] = 'invalid_insights'
+        else:
+            record['status'] = 'generated'
     from seo_agent.store import save_run
     save_run(record, store)
     return record

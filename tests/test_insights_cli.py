@@ -186,6 +186,52 @@ class InsightsCLI(unittest.TestCase):
         runs = self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']
         self.assertEqual(runs[-1], record)
 
+    def test_insights_with_invented_reference_are_rejected_with_recorded_error(self):
+        self.build_pipeline()
+        invented = self.insights()
+        invented['priorities'][0]['references'] = ['https://invented.org/']
+        record = self.invoke('insights', '--project-id', 'horta', '--store', str(self.store),
+                             generate=lambda project, result: invented)
+        self.assertEqual(record['status'], 'invalid_insights')
+        self.assertIsNone(record['result']['insights'])
+        self.assertEqual(record['result']['errors'],
+                         [{'stage': 'generation',
+                           'error': 'Insights inválidos ou gerador indisponível; conferir estrutura, referências e termos.'}])
+        runs = self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']
+        self.assertEqual(runs[-1], record)
+
+    def test_insights_with_invented_term_are_rejected(self):
+        self.build_pipeline()
+        invented = self.insights()
+        invented['gaps'][0]['terms'] = ['clone de plantio vertical']
+        record = self.invoke('insights', '--project-id', 'horta', '--store', str(self.store),
+                             generate=lambda project, result: invented)
+        self.assertEqual(record['status'], 'invalid_insights')
+        self.assertIsNone(record['result']['insights'])
+
+    def test_observation_without_corpus_anchor_is_rejected(self):
+        self.build_pipeline()
+        unanchored = self.insights()
+        unanchored['existing'][0]['references'] = []
+        unanchored['existing'][0]['terms'] = []
+        record = self.invoke('insights', '--project-id', 'horta', '--store', str(self.store),
+                             generate=lambda project, result: unanchored)
+        self.assertEqual(record['status'], 'invalid_insights')
+
+    def test_insights_without_any_content_are_rejected(self):
+        self.build_pipeline()
+        record = self.invoke('insights', '--project-id', 'horta', '--store', str(self.store),
+                             generate=lambda project, result: {'existing': [], 'gaps': [],
+                                                               'priorities': [], 'pending': []})
+        self.assertEqual(record['status'], 'invalid_insights')
+
+    def test_generator_may_return_insights_as_json_string(self):
+        self.build_pipeline()
+        record = self.invoke('insights', '--project-id', 'horta', '--store', str(self.store),
+                             generate=lambda project, result: json.dumps(self.insights()))
+        self.assertEqual(record['status'], 'generated')
+        self.assertEqual(record['result']['insights'], self.insights())
+
 
 if __name__ == '__main__':
     unittest.main()
