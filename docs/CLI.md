@@ -109,17 +109,26 @@ e principais termos/relações — sempre com a URL-fonte de cada fato.
 
 A modelagem é mínima e auditável: entidades `page` (a URL preservada, com
 `source_id` e `retrieved_at`) e `term` (texto normalizado dos headings, em
-minúsculas); relações `has_term` (página→termo) e `links_to` (página→página,
-apenas quando o destino também foi extraído). Toda entidade e relação carrega
-`sources` com as URLs do corpus que a sustentam: nenhuma consulta devolve fato
-sem fonte. Entidades e relações saem em ordem determinística (por tipo, origem
-e destino), e reexecuções sobre a mesma extração produzem a mesma rede.
+minúsculas — os headings são os temas das páginas, por isso `term` cobre o
+papel de tema sem um terceiro tipo de entidade); relações `has_term`
+(página→termo) e `links_to` (página→página, apenas quando o destino também foi
+extraído). Toda entidade e relação carrega `sources` com as URLs do corpus que
+a sustentam: nenhuma consulta devolve fato sem fonte. O registro da rede
+referencia `extraction_run_id`, a execução de extração da qual foi derivada —
+a proveniência vale por fato (URL) e por execução. Entidades e relações saem
+em ordem determinística (por tipo, origem e destino), e reexecuções sobre a
+mesma extração produzem a mesma rede.
 
 Sem extração registrada no histórico, `network build` termina em erro (saída 2)
-orientando executar `extract` antes, sem registrar execução. URL com falha na
+sem registrar execução: se o projeto já tem URLs coletadas, o erro orienta
+executar `extract`; se ainda não tem nenhuma URL, orienta executar a busca
+(`run`) primeiro. URL com falha na
 extração fica fora da rede, com a falha preservada em `excluded`, sem derrubar
 as demais; extração sem fontes válidas devolve `status: "empty"` com rede vazia,
-o que não é erro. O resumo compacto cresce com a estrutura da rede, não com o
+o que não é erro. O resumo compacto traz as contagens completas da rede, mas
+apenas os 20 termos líderes (mais páginas, ordem alfabética como desempate) e
+os 20 primeiros links — as listas são limitadas para o resumo continuar compacto
+em corpora grandes; cresce com a estrutura da rede, não com o
 texto das páginas, e é menor que a soma do texto bruto do corpus — é a forma
 pensada para alimentar uma LLM pagando menos tokens.
 

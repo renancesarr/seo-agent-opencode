@@ -82,14 +82,47 @@ class NetworkCLI(unittest.TestCase):
              'page': extract_page(PLANTAR_HTML, 'https://example.org/plantar')},
         ]
 
-    def test_build_without_extraction_fails_pointing_to_extract(self):
+    def test_build_without_any_collected_urls_points_to_search_first(self):
         self.invoke('prepare', '--project', str(self.project_file), '--store', str(self.store))
+        error = self.invoke_error('network', 'build', '--project-id', 'horta', '--store', str(self.store))
+        self.assertIn('Nenhuma URL coletada', error)
+        self.assertIn('run', error)
+        self.assertNotIn('Traceback', error)
+        runs = self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']
+        self.assertEqual(len(runs), 1)
+
+    def test_build_after_collection_without_extraction_points_to_extract(self):
+        from seo_agent.__main__ import prepare_run
+        prepare_run(self.project, self.store, status='collected', result={'sources': self.extracted_sources()})
         error = self.invoke_error('network', 'build', '--project-id', 'horta', '--store', str(self.store))
         self.assertIn('Nenhuma extração registrada', error)
         self.assertIn('extract', error)
         self.assertNotIn('Traceback', error)
-        runs = self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']
-        self.assertEqual(len(runs), 1)
+
+    def test_network_record_references_the_extraction_run_of_origin(self):
+        extraction = self.record_extraction(self.extracted_sources())
+        built = self.invoke('network', 'build', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(built['result']['extraction_run_id'], extraction['run_id'])
+        rebuilt = self.invoke('network', 'build', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(rebuilt['result']['extraction_run_id'], extraction['run_id'])
+
+    def test_compact_limits_terms_and_links_to_the_leading_ones(self):
+        headings = ''.join(f'<h2>Tema diferente numero {number:02d}</h2>' for number in range(30))
+        page = {'title': 'Muitos temas', 'headings': [{'level': 2, 'text': f'Tema diferente numero {number:02d}'}
+                                                      for number in range(30)], 'links': [], 'text': 'x ' * 400}
+        from seo_agent.__main__ import prepare_run
+        prepare_run(self.project, self.store, status='collected', result={'sources': [
+            {'id': 'fonte-temas', 'url': 'https://example.org/temas',
+             'retrieved_at': '2026-03-01T00:00:00+00:00', 'page': page}]})
+        self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        self.invoke('network', 'build', '--project-id', 'horta', '--store', str(self.store))
+        compact = self.invoke('network', 'query', '--project-id', 'horta', '--store', str(self.store),
+                              '--compact')['compact']
+        self.assertEqual(compact['counts']['terms'], 30)
+        self.assertEqual(len(compact['top_terms']), 20)
+        again = self.invoke('network', 'query', '--project-id', 'horta', '--store', str(self.store),
+                            '--compact')['compact']
+        self.assertEqual(compact['top_terms'], again['top_terms'])
 
     def test_build_derives_pages_terms_and_links_with_sources(self):
         extraction = self.record_extraction(self.extracted_sources())

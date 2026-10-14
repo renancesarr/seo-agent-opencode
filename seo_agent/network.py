@@ -6,15 +6,20 @@ from uuid import uuid4
 
 NO_EXTRACTION_MESSAGE = ('Nenhuma extração registrada no histórico deste projeto; '
                          'execute o comando extract antes de construir a rede.')
+NO_SOURCES_YET_MESSAGE = ('Nenhuma URL coletada no histórico deste projeto; '
+                          'execute a busca (comando run) e depois o extract antes de '
+                          'construir a rede.')
 NO_NETWORK_MESSAGE = ('Nenhuma rede registrada no histórico deste projeto; '
                       'execute o comando network build antes de consultar.')
+
+COMPACT_TERMS_LIMIT = 20
+COMPACT_LINKS_LIMIT = 20
 
 
 def latest_extraction(runs):
     for run in reversed(runs):
-        extractions = (run.get('result') or {}).get('extractions')
-        if extractions is not None:
-            return extractions
+        if (run.get('result') or {}).get('extractions') is not None:
+            return run
     return None
 
 
@@ -25,9 +30,12 @@ def build_network(project_id, runs, store):
     termos dos headings) com a URL-fonte em cada fato; URL com falha de extração
     fica fora da rede, com a falha registrada, sem derrubar as demais.
     """
-    extractions = latest_extraction(runs)
-    if extractions is None:
-        raise ValueError(NO_EXTRACTION_MESSAGE)
+    extraction_run = latest_extraction(runs)
+    if extraction_run is None:
+        has_sources = any((run.get('result') or {}).get('sources')
+                          for run in runs)
+        raise ValueError(NO_EXTRACTION_MESSAGE if has_sources else NO_SOURCES_YET_MESSAGE)
+    extractions = extraction_run['result']['extractions']
     valid = [extraction for extraction in extractions if not extraction.get('failures')]
     excluded = sorted(({'url': extraction['url'], 'failures': extraction['failures']}
                        for extraction in extractions if extraction.get('failures')),
@@ -64,7 +72,8 @@ def build_network(project_id, runs, store):
     status = 'built' if pages else 'empty'
     record = {'run_id': str(uuid4()), 'project_id': project_id,
               'created_at': datetime.now(UTC).isoformat(), 'status': status,
-              'result': {'network': {'entities': entities, 'relations': relations},
+              'result': {'extraction_run_id': extraction_run['run_id'],
+                         'network': {'entities': entities, 'relations': relations},
                          'excluded': excluded}}
     from seo_agent.store import save_run
     save_run(record, store)
@@ -82,7 +91,9 @@ def compact_network(network):
     """Resume a rede em contagens e principais termos/relações, com fontes.
 
     Destinada a reduzir tokens: contém apenas fatos agregados, nunca o texto
-    das páginas; o tamanho acompanha a estrutura da rede, não o corpus bruto.
+    das páginas. Contagens cobrem a rede inteira; as listas trazem apenas os
+    N líderes (mais páginas por termo, primeiros links na ordem alfabética
+    determinística), mantendo o resumo limitado em corpora grandes.
     """
     pages = [entity for entity in network['entities'] if entity['type'] == 'page']
     terms = [entity for entity in network['entities'] if entity['type'] == 'term']
@@ -90,13 +101,15 @@ def compact_network(network):
     term_relations = [relation for relation in network['relations'] if relation['type'] == 'has_term']
     top_terms = sorted(({'term': entity['id'], 'pages': len(entity['sources']),
                          'sources': entity['sources']} for entity in terms),
-                       key=lambda item: (-item['pages'], item['term']))
+                       key=lambda item: (-item['pages'], item['term']))[:COMPACT_TERMS_LIMIT]
+    leading_links = sorted(({'from': relation['from'], 'to': relation['to'],
+                             'sources': relation['sources']} for relation in links),
+                           key=lambda item: (item['from'], item['to']))[:COMPACT_LINKS_LIMIT]
     return {
         'counts': {'pages': len(pages), 'terms': len(terms),
                    'page_links': len(links), 'term_relations': len(term_relations)},
         'top_terms': top_terms,
-        'page_links': [{'from': relation['from'], 'to': relation['to'],
-                        'sources': relation['sources']} for relation in links],
+        'page_links': leading_links,
     }
 
 
