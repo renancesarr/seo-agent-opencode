@@ -163,6 +163,10 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
                                          help='Classificar o tipo de conteúdo de cada fonte extraída.')
     classification.add_argument('--project-id', required=True)
     classification.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    ranking = commands.add_parser('rank',
+                                  help='Pontuar a relevância das fontes e temas do corpus extraído.')
+    ranking.add_argument('--project-id', required=True)
+    ranking.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
     browser_experiment = commands.add_parser('browser-experiment', help='Comparar Quick Actions remotas em fixtures explícitas.')
     browser_experiment.add_argument('--fixtures', type=Path, required=True)
     browser_experiment.add_argument('--output', type=Path, required=True)
@@ -261,6 +265,10 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
             from seo_agent.classify import classify_project
             result = classify_project(args.project_id, history(args.project_id, args.store)['runs'],
                                       args.store)
+        elif args.command == 'rank':
+            from seo_agent.rank import rank_project
+            result = rank_project(args.project_id, history(args.project_id, args.store)['runs'],
+                                  args.store)
         elif args.command == 'search':
             from seo_agent.web import search_web
             result = search_web(args.query, endpoint=args.endpoint, language=args.language, limit=args.limit)

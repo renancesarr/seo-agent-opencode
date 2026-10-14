@@ -1,0 +1,183 @@
+"""Score de relevância de fontes e temas, pela CLI pública e sem rede."""
+
+from contextlib import redirect_stdout, redirect_stderr
+import io
+import json
+from pathlib import Path
+import tempfile
+import unittest
+
+from seo_agent.__main__ import main
+
+
+GUIA_HTML = '''<html lang="pt-BR"><head><title>Guia: horta em apartamentos pequenos</title>
+<script type="application/ld+json">{"@type": "BlogPosting", "author": {"name": "Marina Alves"},
+"datePublished": "2026-02-10"}</script></head><body>
+<h1>Horta em apartamentos pequenos</h1>
+<p>Cultivar uma horta em apartamento pequeno começa pela escolha dos cantos que
+recebem luz direta pela manhã, porque a maioria das folhas comestíveis precisa de
+quatro horas de sol no mínimo para crescer com folhas firmes e sabor marcante.
+Janelas de leste varandas protegidas do vento e prateleiras junto ao vidro são os
+pontos mais valiosos de qualquer planta urbana, e medir esse recurso antes de
+comprar o primeiro vaso evita o erro clássico de encher a casa de mudas que
+estiolam em cantos escuros semanas depois da compra impulsiva da feira.</p>
+<h2>Escolhendo os vasos</h2>
+<p>Vasos fundos servem raízes de tomate e cenoura enquanto recipientes largos e
+rasos acomodam melhor as folhas de alface rúcula e cebolinha que ocupam a
+superfície. Cada vaso precisa de furos de drenagem generosos e um prato para
+conter o excesso de água da rega, porque água parada nas raízes apodrece o sistema
+inteiro em poucos dias de calor. Misturar um terço de composto orgânico ao
+substrato comercial deixa a estrutura leve porosa e rica em microrganismos que
+sustentam o crescimento das hortaliças sem adubações químicas agressivas.</p>
+<h2>Luz e rega</h2>
+<p>A rega deve ser feita sempre no início da manhã diretamente no solo e nunca
+sobre as folhas, porque folhas molhadas em ambiente fechado favorecem fungos que
+abrem buracos circulares nas folhas e se espalham pelas plantas vizinhas. O teste
+do dedo indica o momento exato: enfie o dedo dois centímetros no substrato e
+regue apenas quando estiver seco na ponta. No inverno o intervalo entre regas
+dobra e no verão épocas de vento quente podem exigir duas verificações diárias
+para manter a umidade estável da zona das raízes sempre úmida nunca encharcada.</p>
+<h2>Pragas comuns</h2>
+<p>Pulgões cochonilhas e ácaros são as pragas mais frequentes dos apartamentos e
+aparecem primeiro nos brotos novos tenros da ponta dos ramos. Retirá-los com jato
+suave de água e aplicar sabão neutro diluído a cada três dias interrompe o ciclo
+das colônias antes que atinjam escala de infestação. Plantar tagetes e manjericão
+entre as folhas comestíveis confunde os insetos com o cheiro forte e reduz a
+pressão naturalmente sem venenos que deixam resíduos nas folhas da família.</p>
+<a href="https://example.org/plantar">Como plantar mudas</a>
+</body></html>'''
+
+COLEGA_HTML = '''<html lang="pt-BR"><head><title>Pragas comuns em varandas</title>
+<meta name="author" content="Rita Souza">
+<meta property="article:published_time" content="2026-03-05">
+</head><body>
+<h1>Pragas comuns em varandas</h1>
+<p>Observar as folhas toda semana revela os primeiros sinais de pulgão e
+cochonilha antes que as colônias cresçam, porque pragas de varanda se instalam
+primeiro nos brotos novos e se espalham rápido nos vasos vizinhos.</p>
+<h2>Pragas comuns</h2>
+<p>Jato suave de água e sabão neutro diluído a cada três dias interrompem o ciclo
+das pragas sem venenos, mantendo as folhas livres de resíduos.</p>
+<a href="https://example.org/guia">Guia de horta em apartamentos pequenos</a>
+</body></html>'''
+
+HUB_HTML = '''<html lang="pt-BR"><head><title>Diretório de jardins</title>
+<script type="application/ld+json">{"@type": "ItemList"}</script></head><body>
+<h1>Diretório de jardins</h1>
+<p>Endereços de lojas e guias de jardinagem urbana.</p>
+<ul>
+<li><a href="https://example.org/guia">Guia de horta em apartamentos pequenos</a></li>
+<li><a href="https://example.org/ficha">Loja de jardinagem central</a></li>
+</ul>
+</body></html>'''
+
+FICHA_HTML = '''<html lang="pt-BR"><head><title>Loja de jardinagem central</title>
+<script type="application/ld+json">{"@type": "Organization",
+"name": "Loja de jardinagem central"}</script></head><body>
+<h1>Loja de jardinagem central</h1>
+<p>Loja de insumos e ferramentas de jardinagem no centro da cidade, aberta de
+segunda a sábado, com entrega de substratos e vasos por telefone.</p>
+<a href="https://example.org/facebook">Facebook da loja</a>
+<a href="https://example.org/mapa">Mapa de acesso</a>
+</body></html>'''
+
+VAZIA_HTML = '<html lang="pt-BR"><head><title>Página vazia</title></head><body></body></html>'
+
+
+class RankCLI(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.directory = Path(self.temporary.name)
+        self.store = self.directory / 'history.sqlite3'
+        self.project_file = self.directory / 'project.json'
+        self.project = {'id': 'horta', 'business_context': 'Loja de plantas',
+                        'audience': 'Moradores locais', 'language': 'pt-BR', 'geography': 'Brasil',
+                        'keywords': ['horta'], 'content_goal': 'Priorizar o que escrever'}
+        self.project_file.write_text(json.dumps(self.project), encoding='utf-8')
+
+    def invoke(self, *arguments):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            main(list(arguments))
+        return json.loads(stdout.getvalue())
+
+    def invoke_error(self, *arguments):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                main(list(arguments))
+        self.assertEqual(raised.exception.code, 2)
+        return stderr.getvalue()
+
+    def record_extraction(self, sources):
+        from seo_agent.__main__ import prepare_run
+        prepare_run(self.project, self.store, status='collected', result={'sources': sources})
+        return self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+
+    def ranked_sources(self):
+        """Corpus com relevância conhecida: guia > ficha > colega = hub (empate alfabético)."""
+        from seo_agent.page import extract_page
+        return [
+            {'id': 'fonte-guia', 'url': 'https://example.org/guia',
+             'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': extract_page(GUIA_HTML, 'https://example.org/guia')},
+            {'id': 'fonte-colega', 'url': 'https://example.org/colega',
+             'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': extract_page(COLEGA_HTML, 'https://example.org/colega')},
+            {'id': 'fonte-hub', 'url': 'https://example.org/hub',
+             'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': extract_page(HUB_HTML, 'https://example.org/hub')},
+            {'id': 'fonte-ficha', 'url': 'https://example.org/ficha',
+             'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': extract_page(FICHA_HTML, 'https://example.org/ficha')},
+        ]
+
+    def extra_source(self, identifier, html):
+        from seo_agent.page import extract_page
+        url = f'https://example.org/{identifier}'
+        return {'id': f'fonte-{identifier}', 'url': url,
+                'retrieved_at': '2026-03-01T00:00:00+00:00', 'page': extract_page(html, url)}
+
+    def test_rank_without_any_collected_urls_points_to_search_first(self):
+        self.invoke('prepare', '--project', str(self.project_file), '--store', str(self.store))
+        error = self.invoke_error('rank', '--project-id', 'horta', '--store', str(self.store))
+        self.assertIn('Nenhuma URL coletada', error)
+        self.assertIn('run', error)
+        self.assertNotIn('Traceback', error)
+        runs = self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']
+        self.assertEqual(len(runs), 1)
+
+    def test_rank_after_collection_without_extraction_points_to_extract(self):
+        from seo_agent.__main__ import prepare_run
+        prepare_run(self.project, self.store, status='collected', result={'sources': self.ranked_sources()})
+        error = self.invoke_error('rank', '--project-id', 'horta', '--store', str(self.store))
+        self.assertIn('Nenhuma extração registrada', error)
+        self.assertIn('extract', error)
+        self.assertNotIn('Traceback', error)
+
+    def test_known_relevance_fixtures_rank_in_expected_order(self):
+        self.record_extraction(self.ranked_sources())
+        record = self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(record['status'], 'ranked')
+        self.assertEqual(record['project_id'], 'horta')
+        self.assertEqual([(item['url'], item['score']) for item in record['result']['sources']], [
+            ('https://example.org/guia', 11),
+            ('https://example.org/ficha', 3),
+            ('https://example.org/colega', 2),
+            ('https://example.org/hub', 2),
+        ])
+        self.assertEqual(record['result']['excluded'], [])
+
+    def test_rank_persists_referencing_extraction_run(self):
+        extraction = self.record_extraction(self.ranked_sources())
+        record = self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))
+        self.assertNotEqual(record['run_id'], extraction['run_id'])
+        self.assertTrue(record['created_at'])
+        self.assertEqual(record['result']['extraction_run_id'], extraction['run_id'])
+        runs = self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']
+        self.assertEqual(runs[-1], record)
+
+
+if __name__ == '__main__':
+    unittest.main()
