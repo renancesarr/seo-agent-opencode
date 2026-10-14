@@ -144,6 +144,16 @@ podem exceder o restante; nesse caso o scheduler registra falha e conserva a
 versão anterior, sem prometer conclusão de toda rodada. Sem configuração de
 intervalo, outros agendamentos preservam o padrão anterior de 300 segundos.
 
+## Inteligência de conteúdo sobre o histórico (T07)
+
+Depois do fluxo acima, o histórico acumulado alimenta a análise de conteúdo
+da [spec #23](https://github.com/renancesarr/seo-agent-opencode/issues/23),
+em cadeia: `extract` (extração total determinística) → `network build/query`
+(rede de conhecimento com fonte por fato) → `keywords` (cauda longa
+descoberta) → `classify` (tipos) → `rank` (relevância) → `insights` (LLM
+somente sobre a rede compacta). Contrato e exemplos de cada comando em
+[CLI.md](CLI.md).
+
 Contrato técnico do OpenCode conferido nas docs de
 [configuração](https://opencode.ai/docs/config/),
 [agentes](https://opencode.ai/docs/agents/) e
