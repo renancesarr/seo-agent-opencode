@@ -406,6 +406,28 @@ Implementação local de #10–#16 em 13/10/2026, ainda sujeita a review cruzado
   → 3; colega autor+data → 2; hub ItemList → 2 com empate desempatado por URL;
   tema "pragas comuns" 13 = 11 + 2 agregando guia e colega). Suíte:
   `python -m unittest discover -s tests -q` → 146 OK (1 skip), sem rede/LLM.
+- Ticket #29 implementado na zcode-t29 (spec #23, T07): comando `insights`
+  gera insights por LLM sobre o conhecimento compacto, reutilizando o
+  contrato de geração do `run` (gerador injetável na seam da CLI;
+  `--insights-file` controlado sem modelo; `--model` via OpenCode com
+  deny-all/--pure/JSON — `OpenCodeGenerator` parametrizado por
+  agente/prompt/título com `message` extraído, contrato do outline
+  inalterado). Payload = rede compacta + keywords/classify/rank da MESMA
+  extração da rede (época coerente; análises de outra extração não se
+  misturam), nunca page.text (invariante testado no payload recebido pelo
+  gerador e no prompt do model_runner). Anti-invenção adaptada do
+  validate_proposal: referências só páginas da rede, termos só da rede ou da
+  descoberta, observation exige âncora, rejeições registradas (status
+  `invalid_insights`, erro estágio `generation`) sem derrubar a execução.
+  Sem gerador: agregados entregues + `no_model` com mensagem explícita —
+  não é erro. Entrada: sem URLs → `run`; sem extração → `extract`; sem rede
+  → `network build`; rede vazia → reconstruir corpus; keywords/classify/rank
+  recomendadas — ausências viram pendências informadas em
+  `missing_analyses`. Persistência via save_run com extraction/network/
+  keywords/classify/rank run_ids (`null` quando ausentes). Smoke real em
+  processos separados: no_model entrega conhecimento; `--insights-file`
+  gera; histórico consultável. Suíte:
+  `python -m unittest discover -s tests -q` → 165 OK (1 skip), sem rede/LLM.
 
 Próximo passo operacional: publicar a configuração escolhida, ativar o
 monitoramento após integração aprovada e reproduzir o aceite

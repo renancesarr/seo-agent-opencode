@@ -40,9 +40,18 @@ python3 -m seo_agent classify --project-id horta-local
 
 # Pontuar a relevância das fontes e temas do corpus extraído, com justificativa
 python3 -m seo_agent rank --project-id horta-local
+
+# Gerar insights por LLM sobre a rede compacta e as análises do corpus
+python3 -m seo_agent insights --project-id horta-local
+
+# Gerar insights com um modelo via OpenCode (provedor/modelo)
+python3 -m seo_agent insights --project-id horta-local --model ollama/qwen3
+
+# Entregar insights controlados de um arquivo JSON, sem executar modelo
+python3 -m seo_agent insights --project-id horta-local --insights-file data/insights.json
 ```
 
-`prepare`, `history`, `extract`, `network`, `keywords`, `classify` e `rank` aceitam `--store <arquivo.sqlite3>` para escolher o
+`prepare`, `history`, `extract`, `network`, `keywords`, `classify`, `rank` e `insights` aceitam `--store <arquivo.sqlite3>` para escolher o
 armazenamento. O padrão é `data/seo-agent.sqlite3`, relativo ao diretório atual,
 ignorado pelo Git. Use o mesmo arquivo para consultar as execuções registradas.
 Uma consulta sem histórico devolve lista vazia e não cria o banco.
@@ -288,6 +297,68 @@ extração fica fora do ranking, com a falha preservada em `excluded`, sem
 derrubar as demais; extração sem fontes válidas devolve `status: "empty"`, o
 que não é erro. Reexecuções sobre a mesma extração produzem os mesmos scores —
 apenas `run_id` e `created_at` mudam.
+
+## Insights por LLM sobre a rede compacta
+
+`insights` implementa os insights do [ticket #29](https://github.com/renancesarr/seo-agent-opencode/issues/29)
+e é a única etapa da pipeline de conteúdo que usa LLM — sobre o
+conhecimento compacto, nunca páginas cruas. Reutiliza o contrato de geração
+do `run` (gerador injetável na seam da CLI; modelo opcional via OpenCode com
+`--model provedor/modelo`, ou `--insights-file arquivo.json` para insights
+controlados sem executar modelo).
+
+**Condições de entrada.** A entrada mínima é a rede construída. Sem URLs
+coletadas, o erro orienta executar a busca (`run`); com URLs mas sem
+extração, orienta `extract` (guarda comum da pipeline); com extração mas sem
+rede, orienta `network build`; rede sem páginas válidas orienta reconstruir
+o corpus. Nesses casos nada é registrado. `keywords`, `classify` e `rank`
+são recomendadas, não exigidas: quando ausentes para a extração da rede
+atual, a geração prossegue e a ausência fica registrada como pendência
+informada em `knowledge.missing_analyses`.
+
+**Contrato do payload compacto.** A entrada da LLM é o objeto `knowledge`
+persistido no resultado da execução, e só ele além do snapshot do projeto:
+
+- `network`: o resumo compacto da rede (`network query --compact`) — contagens
+  completas, até 20 termos líderes e até 20 links, cada um com URLs-fonte;
+- `keywords`: quando existente, as palavras-chave do projeto e a descoberta
+  (`kind`, `term`, `frequency`, `sources`, `is_new`);
+- `classifications`: quando existente, `{url, type}` por fonte (sem os sinais
+  internos — o rótulo basta para insights);
+- `rankings`: quando existente, fontes pontuadas `{url, score}` e temas
+  `{term, score, sources}`;
+- `missing_analyses`: análises ausentes, para o modelo expor insuficiência.
+
+O texto bruto das páginas (`page.text`) jamais entra no payload: o
+invariante é testado na suíte. Análises só entram quando derivam da mesma
+execução de extração da rede (`extraction_run_id` igual) — nada de outra
+época do corpus se mistura ao conhecimento enviado.
+
+**Contrato anti-invenção dos insights.** O gerador devolve um objeto
+`{"existing": [...], "gaps": [...], "priorities": [...], "pending": [...]}` —
+o que existe, o que falta e o que priorizar. Cada item de `existing`/`gaps`/
+`priorities` exige `description` e `justification` não vazios, `kind`
+`observation` (provada pelo corpus) ou `hypothesis` (sugestão), `references`
+com URLs de páginas da rede e `terms` com termos da rede ou da descoberta de
+keywords. Referência ou termo fora do corpus é rejeitado; `observation` sem
+nenhuma âncora é rejeitada (`hypothesis` pode não ter âncoras). A rejeição não
+é erro da CLI: a execução sai com `status: "invalid_insights"`, o erro fica
+registrado em `result.errors` (estágio `generation`) e a execução permanece
+consultável no histórico. O contrato é a adaptação mínima do
+`validate_proposal` dos outlines para âncoras URL + termo.
+
+**Sem modelo configurado** (`insights` sem `--model`/`--insights-file` e sem
+gerador injetado), o comando entrega a rede compacta e as análises
+disponíveis em `result.knowledge`, registra `result.message` explicando que
+insights não foram gerados e sai com `status: "no_model"` — não é erro.
+
+**Persistência.** A execução é preservada no histórico com os run_ids de
+origem — `extraction_run_id`, `network_run_id` e, quando presentes,
+`keywords_run_id`, `classify_run_id`, `rank_run_id` (`null` quando a análise
+não alimentou esta execução) — além de `knowledge` (o que foi entregue ao
+gerador), `insights` (quando validados) e `errors`. Status possíveis:
+`generated`, `invalid_insights` e `no_model`. Com `--model`, `result.generator`
+registra backend/modelo e o status do gerador, como no `run`.
 
 ## Busca e inspeção
 
