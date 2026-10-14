@@ -346,6 +346,16 @@ Implementação local de #10–#16 em 13/10/2026, ainda sujeita a review cruzado
   unificado em helper de store; página vazia vira falha; docs atualizados.
   Verificação: `python3 -m unittest discover -s tests -q` → 101 OK (1 skip),
   sem rede/LLM. PR único da spec #23 para dev-ai ao concluir #24–#29.
+- Ticket #25 implementado na zcode-t25 (spec #23, T07): comandos `network
+  build`/`network query` derivam a rede de conhecimento da extração registrada
+  mais recente e a preservam como execução no mesmo store (padrão runs, sem
+  tabelas novas). Modelagem mínima: entidades `page`/`term` e relações
+  `has_term`/`links_to`, cada fato com `sources` (URLs do corpus). URL com
+  falha na extração fica fora com a falha em `excluded`; sem extração → erro
+  acionável apontando `extract`; sem fontes válidas → `status: empty`.
+  `query --compact` devolve contagens e principais termos/links com fontes,
+  menor que a soma do texto bruto (verificado com fixtures reais). Suíte:
+  `python -m unittest discover -s tests -q` → 110 OK (1 skip), sem rede/LLM.
 
 Próximo passo operacional: publicar a configuração escolhida, ativar o
 monitoramento após integração aprovada e reproduzir o aceite

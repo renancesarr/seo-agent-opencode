@@ -19,9 +19,18 @@ python3 -m seo_agent history --project-id horta-local
 
 # Extrair de forma determinística as URLs já coletadas do projeto
 python3 -m seo_agent extract --project-id horta-local
+
+# Construir a rede de conhecimento a partir da extração mais recente
+python3 -m seo_agent network build --project-id horta-local
+
+# Consultar offline a rede registrada, com fonte por fato
+python3 -m seo_agent network query --project-id horta-local
+
+# Resumo compacto da rede, pensado para consumir menos tokens
+python3 -m seo_agent network query --project-id horta-local --compact
 ```
 
-`prepare`, `history` e `extract` aceitam `--store <arquivo.sqlite3>` para escolher o
+`prepare`, `history`, `extract` e `network` aceitam `--store <arquivo.sqlite3>` para escolher o
 armazenamento. O padrão é `data/seo-agent.sqlite3`, relativo ao diretório atual,
 ignorado pelo Git. Use o mesmo arquivo para consultar as execuções registradas.
 Uma consulta sem histórico devolve lista vazia e não cria o banco.
@@ -88,6 +97,31 @@ extrações em ordem alfabética de URL. Falha de uma URL (página preservada
 ilegível) fica registrada em `failures` com o estágio, sem derrubar as demais;
 ausência de sinal (por exemplo, página sem autor) não é erro. Reexecutar sobre
 as mesmas fontes produz a mesma extração: apenas `run_id` e `created_at` mudam.
+
+## Rede de conhecimento das extrações
+
+`network` implementa a rede do [ticket #25](https://github.com/renancesarr/seo-agent-opencode/issues/25)
+e consome somente o histórico local: sem LLM, rede ou serviço externo.
+`network build` deriva a rede da extração registrada mais recente e a preserva
+como nova execução no histórico, sem destruir as anteriores; `network query`
+devolve essa rede exatamente como preservada, e `--compact` resume em contagens
+e principais termos/relações — sempre com a URL-fonte de cada fato.
+
+A modelagem é mínima e auditável: entidades `page` (a URL preservada, com
+`source_id` e `retrieved_at`) e `term` (texto normalizado dos headings, em
+minúsculas); relações `has_term` (página→termo) e `links_to` (página→página,
+apenas quando o destino também foi extraído). Toda entidade e relação carrega
+`sources` com as URLs do corpus que a sustentam: nenhuma consulta devolve fato
+sem fonte. Entidades e relações saem em ordem determinística (por tipo, origem
+e destino), e reexecuções sobre a mesma extração produzem a mesma rede.
+
+Sem extração registrada no histórico, `network build` termina em erro (saída 2)
+orientando executar `extract` antes, sem registrar execução. URL com falha na
+extração fica fora da rede, com a falha preservada em `excluded`, sem derrubar
+as demais; extração sem fontes válidas devolve `status: "empty"` com rede vazia,
+o que não é erro. O resumo compacto cresce com a estrutura da rede, não com o
+texto das páginas, e é menor que a soma do texto bruto do corpus — é a forma
+pensada para alimentar uma LLM pagando menos tokens.
 
 ## Busca e inspeção
 
