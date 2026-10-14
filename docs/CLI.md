@@ -21,7 +21,7 @@ python3 -m seo_agent history --project-id horta-local
 python3 -m seo_agent extract --project-id horta-local
 ```
 
-`prepare` e `history` aceitam `--store <arquivo.sqlite3>` para escolher o
+`prepare`, `history` e `extract` aceitam `--store <arquivo.sqlite3>` para escolher o
 armazenamento. O padrão é `data/seo-agent.sqlite3`, relativo ao diretório atual,
 ignorado pelo Git. Use o mesmo arquivo para consultar as execuções registradas.
 Uma consulta sem histórico devolve lista vazia e não cria o banco.

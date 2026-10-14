@@ -52,21 +52,17 @@ def prepare_run(project, store, *, status='prepared', result=None):
     }
     if result and result.get('outline'):
         result['outline'].setdefault('created_run_id', record['run_id'])
-    store.parent.mkdir(parents=True, exist_ok=True)
-    with closing(sqlite3.connect(store)) as database, database:
-        database.execute(
-            'CREATE TABLE IF NOT EXISTS runs '
-            '(id TEXT PRIMARY KEY, project_id TEXT NOT NULL, record TEXT NOT NULL)'
-        )
-        if result is not None:
-            from seo_agent.monitoring import add_notices
+    if result is not None:
+        from seo_agent.monitoring import add_notices
+
+        def before_insert(database):
             previous = [json.loads(row[0]) for row in database.execute(
                 'SELECT record FROM runs WHERE project_id=? ORDER BY rowid', (project['id'],))]
             add_notices(record, previous)
-        database.execute(
-            'INSERT INTO runs (id, project_id, record) VALUES (?, ?, ?)',
-            (record['run_id'], project['id'], json.dumps(record, ensure_ascii=False)),
-        )
+    else:
+        before_insert = None
+    from seo_agent.store import save_run
+    save_run(record, store, before_insert=before_insert)
     return record
 
 

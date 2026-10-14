@@ -143,6 +143,37 @@ class ExtractCLI(unittest.TestCase):
         self.assertEqual(len(runs), 2)
         self.assertEqual(runs[-1], record)
 
+    def test_empty_preserved_page_is_a_page_failure_not_readable(self):
+        from seo_agent.__main__ import prepare_run
+        prepare_run(self.project, self.store, status='partial', result={'sources': [
+            {'id': 'fonte-vazia', 'url': 'https://example.org/empty',
+             'retrieved_at': '2026-03-01T00:00:00+00:00', 'page': {}}]})
+        record = self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(record['status'], 'partial')
+        [extraction] = record['result']['extractions']
+        self.assertNotIn('page', extraction)
+        self.assertEqual(extraction['failures'], [
+            {'stage': 'page', 'error': 'Página preservada ausente ou ilegível no histórico desta fonte.'},
+        ])
+
+    def test_invalid_structured_data_surfaces_as_stage_failure_without_breaking_the_url(self):
+        from seo_agent.__main__ import prepare_run
+        from seo_agent.page import extract_page
+        page = extract_page('<title>Guia</title><p>Texto válido.</p>'
+                            '<script type="application/ld+json">{invalido</script>',
+                            'https://example.org/guide')
+        self.assertTrue(page['structured_data_errors'])
+        prepare_run(self.project, self.store, status='collected', result={'sources': [
+            {'id': 'fonte-json-ld', 'url': 'https://example.org/guide',
+             'retrieved_at': '2026-03-01T00:00:00+00:00', 'page': page}]})
+        record = self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(record['status'], 'partial')
+        [extraction] = record['result']['extractions']
+        self.assertIn('page', extraction)
+        [failure] = extraction['failures']
+        self.assertEqual(failure['stage'], 'structured_data')
+        self.assertEqual(failure['error'], page['structured_data_errors'][0])
+
     def test_reexecution_over_same_sources_is_identical_and_uses_latest_preserved_page(self):
         self.collect()
         second = self.collect(html='<title>Guia nova</title><h1>Horta</h1><p>Conteúdo atualizado.</p>')

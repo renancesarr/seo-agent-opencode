@@ -1,9 +1,6 @@
 """Extração total e determinística das fontes já preservadas no histórico."""
 
-from contextlib import closing
 from datetime import datetime, UTC
-import json
-import sqlite3
 from uuid import uuid4
 
 
@@ -15,13 +12,15 @@ def extract_source(url, source):
     page = source.get('page')
     extraction = {'url': url, 'source_id': source.get('id'), 'retrieved_at': source.get('retrieved_at'),
                   'failures': []}
-    if not isinstance(page, dict):
+    if not isinstance(page, dict) or not page:
         extraction['failures'].append({
             'stage': 'page',
             'error': 'Página preservada ausente ou ilegível no histórico desta fonte.',
         })
-    else:
-        extraction['page'] = page
+        return extraction
+    extraction['page'] = page
+    for error in page.get('structured_data_errors') or []:
+        extraction['failures'].append({'stage': 'structured_data', 'error': error})
     return extraction
 
 
@@ -44,11 +43,6 @@ def extract_project(project_id, runs, store):
     record = {'run_id': str(uuid4()), 'project_id': project_id,
               'created_at': datetime.now(UTC).isoformat(), 'status': status,
               'result': {'extractions': extractions}}
-    store.parent.mkdir(parents=True, exist_ok=True)
-    with closing(sqlite3.connect(store)) as database, database:
-        database.execute(
-            'CREATE TABLE IF NOT EXISTS runs '
-            '(id TEXT PRIMARY KEY, project_id TEXT NOT NULL, record TEXT NOT NULL)')
-        database.execute('INSERT INTO runs (id, project_id, record) VALUES (?, ?, ?)',
-                         (record['run_id'], project_id, json.dumps(record, ensure_ascii=False)))
+    from seo_agent.store import save_run
+    save_run(record, store)
     return record
