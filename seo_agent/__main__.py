@@ -153,6 +153,12 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
     network_query.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
     network_query.add_argument('--compact', action='store_true',
                                help='Resumo compacto (contagens e principais termos/relações) para poupar tokens.')
+    keywords = commands.add_parser('keywords',
+                                   help='Descobrir palavras-chave no corpus extraído, com fonte por termo.')
+    keywords.add_argument('--project-id', required=True)
+    keywords.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    keywords.add_argument('--limit', type=int, default=50,
+                          help='Máximo de termos descobertos na saída (padrão 50).')
     browser_experiment = commands.add_parser('browser-experiment', help='Comparar Quick Actions remotas em fixtures explícitas.')
     browser_experiment.add_argument('--fixtures', type=Path, required=True)
     browser_experiment.add_argument('--output', type=Path, required=True)
@@ -243,6 +249,10 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
                 result = build_network(args.project_id, runs, args.store)
             else:
                 result = query_network(args.project_id, runs, compact=args.compact)
+        elif args.command == 'keywords':
+            from seo_agent.keywords import discover_keywords
+            result = discover_keywords(args.project_id, history(args.project_id, args.store)['runs'],
+                                       args.store, limit=args.limit)
         elif args.command == 'search':
             from seo_agent.web import search_web
             result = search_web(args.query, endpoint=args.endpoint, language=args.language, limit=args.limit)
