@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Protege branches de integração:
-# - main: somente humano (GIT_HUMAN=1)
-# - dev-ai: somente merges (branch de review aprovada) ou humano
-branch=$(git rev-parse --abbrev-ref HEAD)
+# Bloqueio rápido de branches de integração em commits comuns.
+# Identidade e merges são validados no commit-msg (roda em todos os commits,
+# inclusive merges) e revalidados no pre-push (objetos reais).
+branch=$(git symbolic-ref --short -q HEAD || true)
 
 if [ "$branch" = "main" ] && [ "$GIT_HUMAN" != "1" ]; then
   echo "ERRO: 'main' é branch humana - agente não commita aqui."
-  echo "Agentes: trabalhe em zcode-ai/codex-ai e siga o fluxo de review (AGENTS.md)."
+  echo "Agentes: trabalhe em zcode-ai/codex-ai e siga o fluxo de PR (AGENTS.md)."
   echo "Humano: GIT_HUMAN=1 git commit ... (ou --no-verify)."
   exit 1
 fi
 
 if [ "$branch" = "dev-ai" ] && [ "$GIT_HUMAN" != "1" ]; then
   if [ ! -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
-    echo "ERRO: 'dev-ai' só recebe merges de branches code-review/<id> aprovadas."
-    echo "Trabalhe em zcode-ai/codex-ai; o agente oposto revisa; só então o merge (AGENTS.md)."
+    echo "ERRO: 'dev-ai' só recebe merges de PRs aprovados pelo agente oposto."
+    echo "Trabalhe em zcode-ai/codex-ai; o review acontece no PR (AGENTS.md)."
     exit 1
   fi
 fi

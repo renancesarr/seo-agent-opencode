@@ -1,0 +1,44 @@
+[
+  {
+    "name": "static",
+    "url": "https://fixtures.example.org/static.html",
+    "expected_text": [
+      "STATIC_READY"
+    ]
+  },
+  {
+    "name": "delayed",
+    "url": "https://fixtures.example.org/delayed.html",
+    "expected_text": [
+      "DELAYED_READY"
+    ]
+  },
+  {
+    "name": "lazy",
+    "url": "https://fixtures.example.org/lazy.html",
+    "expected_text": [
+      "LAZY_READY"
+    ]
+  },
+  {
+    "name": "iframe",
+    "url": "https://fixtures.example.org/iframe.html",
+    "expected_text": [
+      "IFRAME_READY"
+    ]
+  },
+  {
+    "name": "shadow-open",
+    "url": "https://fixtures.example.org/shadow-open.html",
+    "expected_text": [
+      "SHADOW_OPEN_READY"
+    ]
+  },
+  {
+    "name": "shadow-closed",
+    "url": "https://fixtures.example.org/shadow-closed.html",
+    "expected_text": [
+      "SHADOW_CLOSED_READY"
+    ]
+  }
+]
