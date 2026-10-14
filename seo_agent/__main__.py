@@ -143,6 +143,16 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
     extraction = commands.add_parser('extract', help='Extrair de forma determinística as URLs já coletadas.')
     extraction.add_argument('--project-id', required=True)
     extraction.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    network = commands.add_parser('network', help='Rede de conhecimento das extrações, offline e com fonte por fato.')
+    network_commands = network.add_subparsers(dest='network_command', required=True)
+    network_build = network_commands.add_parser('build', help='Derivar a rede da extração mais recente e registrar execução.')
+    network_build.add_argument('--project-id', required=True)
+    network_build.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    network_query = network_commands.add_parser('query', help='Consultar offline a rede registrada.')
+    network_query.add_argument('--project-id', required=True)
+    network_query.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    network_query.add_argument('--compact', action='store_true',
+                               help='Resumo compacto (contagens e principais termos/relações) para poupar tokens.')
     browser_experiment = commands.add_parser('browser-experiment', help='Comparar Quick Actions remotas em fixtures explícitas.')
     browser_experiment.add_argument('--fixtures', type=Path, required=True)
     browser_experiment.add_argument('--output', type=Path, required=True)
@@ -226,6 +236,10 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
         elif args.command == 'extract':
             from seo_agent.extract import extract_project
             result = extract_project(args.project_id, history(args.project_id, args.store)['runs'], args.store)
+        elif args.command == 'network':
+            from seo_agent.network import build_network
+            if args.network_command == 'build':
+                result = build_network(args.project_id, history(args.project_id, args.store)['runs'], args.store)
         elif args.command == 'search':
             from seo_agent.web import search_web
             result = search_web(args.query, endpoint=args.endpoint, language=args.language, limit=args.limit)
