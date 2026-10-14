@@ -34,9 +34,12 @@ python3 -m seo_agent keywords --project-id horta-local
 
 # Limitar a lista de descobertos (padrão 50)
 python3 -m seo_agent keywords --project-id horta-local --limit 20
+
+# Classificar o tipo de conteúdo de cada fonte extraída, com justificativa
+python3 -m seo_agent classify --project-id horta-local
 ```
 
-`prepare`, `history`, `extract`, `network` e `keywords` aceitam `--store <arquivo.sqlite3>` para escolher o
+`prepare`, `history`, `extract`, `network`, `keywords` e `classify` aceitam `--store <arquivo.sqlite3>` para escolher o
 armazenamento. O padrão é `data/seo-agent.sqlite3`, relativo ao diretório atual,
 ignorado pelo Git. Use o mesmo arquivo para consultar as execuções registradas.
 Uma consulta sem histórico devolve lista vazia e não cria o banco.
@@ -181,6 +184,54 @@ se ainda não tem nenhuma URL, orienta executar a busca (`run`) primeiro. URL
 com falha na extração fica fora da descoberta, com a falha preservada em
 `excluded`, sem derrubar as demais; extração sem fontes válidas devolve
 `status: "empty"` com lista vazia, o que não é erro.
+
+## Classificação de tipos de conteúdo
+
+`classify` implementa a classificação do [ticket #27](https://github.com/renancesarr/seo-agent-opencode/issues/27)
+e consome somente o histórico local: sem LLM, rede ou serviço externo. Sobre a
+extração registrada mais recente, rotula cada URL em um tipo de conteúdo —
+`article` (artigo/guia), `listing` (listagem/diretório) ou `profile`
+(ficha/institucional) — e preserva a classificação como nova execução no
+histórico, referenciando `extraction_run_id`.
+
+O método é ML clássico local: classificador linear de pontuação sobre
+indicadores binários dos sinais já extraídos, com pesos fixos auditáveis no
+módulo (`WEIGHTS`). Sem aleatoriedade alguma — determinístico por construção,
+sem semente. Sem corpus rotulado para treinar modelos nesta etapa, a regra
+linear com indicadores de interpretação causal direta é suficiente e
+corrigível: cada saída publica a evidência que a sustenta.
+
+| Indicador | Regra de ativação | article | listing | profile |
+|---|---|---|---|---|
+| `long_prose` | texto com >= 300 palavras | 3 | — | — |
+| `structured_headings` | >= 3 headings | 2 | — | — |
+| `has_author` | autor extraído (meta/JSON-LD) | 1 | — | — |
+| `has_date` | data extraída (meta/time/JSON-LD) | 1 | — | — |
+| `type_article` | JSON-LD `Article`/`BlogPosting`/`NewsArticle` | 3 | — | — |
+| `many_links` | >= 12 links | — | 3 | — |
+| `anchor_heavy` | >= 50% das palavras do texto em âncoras | — | 2 | — |
+| `type_listing` | JSON-LD `ItemList`/`CollectionPage` | — | 3 | — |
+| `sparse` | <= 300 palavras, <= 5 links e <= 2 headings | — | — | 3 |
+| `type_profile` | JSON-LD `ProfilePage`/`Person`/`Organization`/`LocalBusiness`/`AboutPage` | — | — | 3 |
+
+O rótulo é o tipo de maior pontuação; empate decide em ordem alfabética do
+tipo. A justificativa é inspecionável por URL: cada classificação sai com
+`signals` — valores observados (`text_words`, `headings`, `links`,
+`linked_words_ratio`, `structured_types`, `has_author`, `has_date`) — e
+`scores`, a pontuação dos três tipos. O operador vê por que a página recebeu o
+rótulo e pode auditar ou ajustar os pesos.
+
+Página sem texto utilizável, ou sem nenhum indicador ativo (pontuação máxima
+zero), sai como pendência `unclassified` com o motivo — não é erro; o registro
+inteiro fica `status: "partial"` para revisão. Sem extração registrada,
+`classify` termina em erro (saída 2) sem registrar execução: se o projeto já
+tem URLs coletadas, o erro orienta executar `extract`; se ainda não tem nenhuma
+URL, orienta executar a busca (`run`) primeiro. URL com falha na extração fica
+fora da classificação, com a falha preservada em `excluded`, sem derrubar as
+demais; extração sem fontes válidas devolve `status: "empty"`, o que não é
+erro. As classificações saem em ordem alfabética de URL e reexecuções sobre a
+mesma extração produzem o mesmo resultado — apenas `run_id` e `created_at`
+mudam.
 
 ## Busca e inspeção
 

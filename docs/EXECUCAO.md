@@ -369,6 +369,23 @@ Implementação local de #10–#16 em 13/10/2026, ainda sujeita a review cruzado
   URL com a falha em `excluded`; ordenação por frequência decrescente e
   alfabética, `--limit` padrão 50; reexecução idêntica. Suíte:
   `python -m unittest discover -s tests -q` → 124 OK (1 skip), sem rede/LLM.
+- Ticket #27 implementado na zcode-t27 (spec #23, T07): comando `classify`
+  rotula cada fonte da extração mais recente em `article`/`listing`/`profile`
+  por classificador linear de pontuação — ML clássico local, pesos fixos
+  auditáveis em `WEIGHTS`, determinístico sem semente — sobre indicadores dos
+  sinais já extraídos (prosa >= 300 palavras, >= 3 headings, autoria/datas,
+  >= 12 links, >= 50% do texto em âncoras, esparsidade, @type do JSON-LD);
+  vence a maior pontuação, empate em ordem alfabética. Cada rótulo sai com
+  `signals` (valores observados) e `scores` por tipo (justificativa
+  inspecionável); página sem texto ou sem indicador vira pendência
+  `unclassified` com motivo e status `partial`, não erro; condição de entrada,
+  `excluded` e `empty` iguais ao `network build`/`keywords`; registro via
+  save_run com `extraction_run_id`, saída ordenada por URL, reexecução
+  idêntica. Evidência do método: fixtures de tipo conhecido classificam
+  corretamente (guia 364 palavras/4 headings/BlogPosting → article 10;
+  diretório 15 links/razão de âncoras 0,91/ItemList → listing 8; ficha 29
+  palavras/Organization → profile 6). Suíte:
+  `python -m unittest discover -s tests -q` → 134 OK (1 skip), sem rede/LLM.
 
 Próximo passo operacional: publicar a configuração escolhida, ativar o
 monitoramento após integração aprovada e reproduzir o aceite
