@@ -178,6 +178,37 @@ class RankCLI(unittest.TestCase):
         runs = self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']
         self.assertEqual(runs[-1], record)
 
+    def test_score_publishes_factors_with_values_and_weights(self):
+        self.record_extraction(self.ranked_sources())
+        record = self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))
+        by_url = {item['url']: item for item in record['result']['sources']}
+        self.assertEqual(by_url['https://example.org/guia']['factors'], [
+            {'signal': 'has_author', 'value': True, 'weight': 1, 'points': 1},
+            {'signal': 'has_date', 'value': True, 'weight': 1, 'points': 1},
+            {'signal': 'substantial_text', 'value': 364, 'weight': 3, 'points': 3},
+            {'signal': 'structured_headings', 'value': 4, 'weight': 2, 'points': 2},
+            {'signal': 'structured_data', 'value': 1, 'weight': 2, 'points': 2},
+            {'signal': 'inbound_links', 'value': 2, 'weight': 1, 'points': 2},
+        ])
+        hub = by_url['https://example.org/hub']
+        self.assertEqual([factor['points'] for factor in hub['factors']], [0, 0, 0, 0, 2, 0])
+        for item in record['result']['sources']:
+            self.assertEqual(item['score'], sum(factor['points'] for factor in item['factors']))
+
+    def test_theme_scores_aggregate_source_scores_with_source_urls(self):
+        self.record_extraction(self.ranked_sources())
+        record = self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(record['result']['themes'], [
+            {'term': 'pragas comuns', 'score': 13,
+             'sources': ['https://example.org/guia', 'https://example.org/colega']},
+            {'term': 'escolhendo os vasos', 'score': 11, 'sources': ['https://example.org/guia']},
+            {'term': 'horta em apartamentos pequenos', 'score': 11, 'sources': ['https://example.org/guia']},
+            {'term': 'luz e rega', 'score': 11, 'sources': ['https://example.org/guia']},
+            {'term': 'loja de jardinagem central', 'score': 3, 'sources': ['https://example.org/ficha']},
+            {'term': 'diretório de jardins', 'score': 2, 'sources': ['https://example.org/hub']},
+            {'term': 'pragas comuns em varandas', 'score': 2, 'sources': ['https://example.org/colega']},
+        ])
+
 
 if __name__ == '__main__':
     unittest.main()

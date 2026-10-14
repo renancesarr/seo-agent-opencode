@@ -48,7 +48,12 @@ def _inbound_links(valid):
 
 
 def rank_source(extraction, inbound):
-    """Pontua uma extração válida com os sinais observados e os pesos fixos."""
+    """Pontua uma extração válida com os sinais observados e os pesos fixos.
+
+    A justificativa é inspecionável: cada fator sai com o sinal, o valor
+    observado, o peso aplicado e os pontos que contribuiu — o score é a soma
+    dos pontos. Página sem texto utilizável vira pendência com motivo, não erro.
+    """
     url = extraction['url']
     page = extraction.get('page') or {}
     text_words = len((page.get('text') or '').split())
@@ -56,17 +61,29 @@ def rank_source(extraction, inbound):
         return {'url': url, 'reason': 'Página sem texto utilizável para pontuar.'}
     headings = len(page.get('headings') or [])
     structured_data = len(page.get('structured_data') or [])
-    signals = {
+    observed = {
         'has_author': bool(page.get('authors')),
         'has_date': bool(page.get('dates')),
+        'substantial_text': text_words,
+        'structured_headings': headings,
+        'structured_data': structured_data,
+        'inbound_links': inbound,
+    }
+    active = {
+        'has_author': observed['has_author'],
+        'has_date': observed['has_date'],
         'substantial_text': text_words >= SUBSTANTIAL_TEXT_WORDS,
         'structured_headings': headings >= STRUCTURED_HEADINGS,
         'structured_data': structured_data >= 1,
     }
-    score = sum(weight for signal, weight in WEIGHTS.items()
-                if signal != 'inbound_links' and signals[signal])
-    score += WEIGHTS['inbound_links'] * min(inbound, INBOUND_LINKS_CAP)
-    return {'url': url, 'score': score}
+    factors = []
+    score = 0
+    for signal, weight in WEIGHTS.items():
+        count = min(inbound, INBOUND_LINKS_CAP) if signal == 'inbound_links' else int(bool(active[signal]))
+        points = weight * count
+        score += points
+        factors.append({'signal': signal, 'value': observed[signal], 'weight': weight, 'points': points})
+    return {'url': url, 'score': score, 'factors': factors}
 
 
 def rank_project(project_id, runs, store):
@@ -83,11 +100,33 @@ def rank_project(project_id, runs, store):
     scored = sorted((item for item in ranked if 'score' in item),
                     key=lambda item: (-item['score'], item['url']))
     pending = sorted((item for item in ranked if 'reason' in item), key=lambda item: item['url'])
+    themes = _themes(valid, {item['url']: item['score'] for item in scored})
     status = 'empty' if not valid else ('partial' if pending else 'ranked')
     record = {'run_id': str(uuid4()), 'project_id': project_id,
               'created_at': datetime.now(UTC).isoformat(), 'status': status,
               'result': {'extraction_run_id': extraction_run['run_id'],
-                         'sources': scored + pending, 'excluded': excluded}}
+                         'sources': scored + pending, 'themes': themes, 'excluded': excluded}}
     from seo_agent.store import save_run
     save_run(record, store)
     return record
+
+
+def _themes(valid, score_by_url):
+    """Agrega em temas os scores das fontes que os cobrem, com as URLs-fonte.
+
+    O tema é o texto normalizado dos headings (o mesmo critério de `term` da
+    rede); o score do tema é a soma dos scores das fontes que tratam o tema.
+    """
+    sources = {}
+    for extraction in valid:
+        url = extraction['url']
+        if url not in score_by_url:
+            continue
+        for heading in (extraction.get('page') or {}).get('headings') or []:
+            term = ' '.join((heading.get('text') or '').split()).lower()
+            if term:
+                sources.setdefault(term, set()).add(url)
+    themes = [{'term': term, 'score': sum(score_by_url[url] for url in urls),
+               'sources': sorted(urls, key=lambda url: (-score_by_url[url], url))}
+              for term, urls in sources.items()]
+    return sorted(themes, key=lambda theme: (-theme['score'], theme['term']))
