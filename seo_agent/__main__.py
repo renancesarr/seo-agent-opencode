@@ -144,6 +144,9 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
     notices = commands.add_parser('notices', help='Consultar avisos locais sem repetir fatos inalterados.')
     notices.add_argument('--project-id', required=True)
     notices.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    extraction = commands.add_parser('extract', help='Extrair de forma determinística as URLs já coletadas.')
+    extraction.add_argument('--project-id', required=True)
+    extraction.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
     browser_experiment = commands.add_parser('browser-experiment', help='Comparar Quick Actions remotas em fixtures explícitas.')
     browser_experiment.add_argument('--fixtures', type=Path, required=True)
     browser_experiment.add_argument('--output', type=Path, required=True)
@@ -224,6 +227,9 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
             result = {'project_id': args.project_id, 'notices': [notice
                       for run in history(args.project_id, args.store)['runs']
                       for notice in (run.get('result') or {}).get('notices', [])]}
+        elif args.command == 'extract':
+            from seo_agent.extract import extract_project
+            result = extract_project(args.project_id, history(args.project_id, args.store)['runs'], args.store)
         elif args.command == 'search':
             from seo_agent.web import search_web
             result = search_web(args.query, endpoint=args.endpoint, language=args.language, limit=args.limit)
