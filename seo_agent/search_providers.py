@@ -178,25 +178,29 @@ def _yandex(query, environment, fetch):
     return _normalize(items, ['yandex'])
 
 
+def load_environment(env_file='.env'):
+    environment = {}
+    path = Path(env_file)
+    if path.exists():
+        for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+            if not line.strip() or line.lstrip().startswith('#'):
+                continue
+            match = re.fullmatch(r'\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)', line)
+            if match is None:
+                raise ValueError(f'Arquivo de ambiente inválido na linha {number}.')
+            try:
+                values = shlex.split(match[2], comments=True)
+            except ValueError:
+                raise ValueError(f'Valor inválido no arquivo de ambiente, linha {number}.') from None
+            if len(values) > 1:
+                raise ValueError(f'Use aspas no valor da linha {number} do arquivo de ambiente.')
+            environment[match[1]] = values[0] if values else ''
+    return environment | os.environ
+
+
 def configured_providers(environment=None, *, env_file='.env', fetch=None):
     if environment is None:
-        environment = {}
-        path = Path(env_file)
-        if path.exists():
-            for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
-                if not line.strip() or line.lstrip().startswith('#'):
-                    continue
-                match = re.fullmatch(r'\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)', line)
-                if match is None:
-                    raise ValueError(f'Arquivo de ambiente inválido na linha {number}.')
-                try:
-                    values = shlex.split(match[2], comments=True)
-                except ValueError:
-                    raise ValueError(f'Valor inválido no arquivo de ambiente, linha {number}.') from None
-                if len(values) > 1:
-                    raise ValueError(f'Use aspas no valor da linha {number} do arquivo de ambiente.')
-                environment[match[1]] = values[0] if values else ''
-        environment.update(os.environ)
+        environment = load_environment(env_file)
     providers = []
     if environment.get('BRAVE_SEARCH_API_KEY', '').strip():
         providers.append(SearchProvider('brave', BraveSearchProvider(

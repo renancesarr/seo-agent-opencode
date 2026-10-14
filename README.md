@@ -31,7 +31,10 @@ Para configurar `.env` e obter credenciais dos provedores, veja
 O lote seleciona as APIs com credenciais completas automaticamente.
 O [backlog de experimentos](docs/BACKLOG.md) inclui a avaliação do Kitesurf.
 [Navegação por jornadas e telas](docs/NAVEGACAO-CONCORRENTES.md) está implementada;
-análise por modelo e geração de outlines continuam nas próximas tarefas do roteiro.
+O [fluxo por projeto](docs/FLUXO-PROJETO.md) conecta pesquisa, geração pelo OpenCode,
+outlines versionados, revisão e avisos locais. O agendador exige configuração
+explícita antes da ativação. O [experimento Kitesurf](docs/EXPERIMENTO-KITESURF.md)
+está separado do crawler e ainda depende de credenciais/fixtures para aceite remoto.
 
 ## Workflow de desenvolvimento (o diferente deste repo)
 
