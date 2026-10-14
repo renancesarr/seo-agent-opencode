@@ -114,6 +114,49 @@ class ExtractCLI(unittest.TestCase):
         runs = self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']
         self.assertEqual(runs, [collected, record])
 
+    def test_partial_failure_by_url_preserves_others_and_absence_is_not_error(self):
+        from seo_agent.__main__ import prepare_run
+        from seo_agent.page import extract_page
+        sources = [
+            {'id': 'fonte-valida', 'url': 'https://example.org/valid',
+             'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': extract_page('<title>Simples</title><p>Sem autor e sem datas.</p>',
+                                  'https://example.org/valid')},
+            {'id': 'fonte-quebrada', 'url': 'https://example.org/broken',
+             'retrieved_at': '2026-03-01T00:00:00+00:00', 'page': None},
+        ]
+        prepare_run(self.project, self.store, status='partial', result={'sources': sources})
+        record = self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(record['status'], 'partial')
+        self.assertEqual([item['url'] for item in record['result']['extractions']],
+                         ['https://example.org/broken', 'https://example.org/valid'])
+        broken, valid = record['result']['extractions']
+        self.assertEqual(valid['failures'], [])
+        self.assertEqual(valid['page']['authors'], [])
+        self.assertEqual(valid['page']['dates'], [])
+        self.assertNotIn('page', broken)
+        self.assertEqual(broken['source_id'], 'fonte-quebrada')
+        self.assertEqual(broken['failures'], [
+            {'stage': 'page', 'error': 'Página preservada ausente ou ilegível no histórico desta fonte.'},
+        ])
+        runs = self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']
+        self.assertEqual(len(runs), 2)
+        self.assertEqual(runs[-1], record)
+
+    def test_reexecution_over_same_sources_is_identical_and_uses_latest_preserved_page(self):
+        self.collect()
+        second = self.collect(html='<title>Guia nova</title><h1>Horta</h1><p>Conteúdo atualizado.</p>')
+        first_extract = self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        second_extract = self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(first_extract['result'], second_extract['result'])
+        self.assertEqual(first_extract['status'], second_extract['status'])
+        self.assertNotEqual(first_extract['run_id'], second_extract['run_id'])
+        self.assertNotEqual(first_extract['created_at'], second_extract['created_at'])
+        [extraction] = first_extract['result']['extractions']
+        self.assertEqual(extraction['page']['title'], 'Guia nova')
+        self.assertEqual(extraction['retrieved_at'], second['result']['sources'][0]['retrieved_at'])
+        self.assertEqual(len(self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']), 4)
+
 
 if __name__ == '__main__':
     unittest.main()
