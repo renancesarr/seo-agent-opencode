@@ -171,6 +171,10 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
                                    help='Gerar insights por LLM sobre a rede compacta e análises do corpus.')
     insights.add_argument('--project-id', required=True)
     insights.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    insights_generation = insights.add_mutually_exclusive_group()
+    insights_generation.add_argument('--insights-file', type=Path,
+                                     help='Insights JSON controlados; não executa modelo.')
+    insights_generation.add_argument('--model', help='Gerar pelo OpenCode usando provedor/modelo.')
     browser_experiment = commands.add_parser('browser-experiment', help='Comparar Quick Actions remotas em fixtures explícitas.')
     browser_experiment.add_argument('--fixtures', type=Path, required=True)
     browser_experiment.add_argument('--output', type=Path, required=True)
@@ -274,9 +278,15 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
             result = rank_project(args.project_id, history(args.project_id, args.store)['runs'],
                                   args.store)
         elif args.command == 'insights':
-            from seo_agent.insights import generate_insights
+            from seo_agent.insights import InsightsGenerator, generate_insights
+            insight_generator = generate
+            if args.insights_file:
+                def insight_generator(project, result):
+                    return json.loads(args.insights_file.read_text(encoding='utf-8'))
+            elif args.model:
+                insight_generator = InsightsGenerator(args.model, runner=model_runner)
             result = generate_insights(args.project_id, history(args.project_id, args.store)['runs'],
-                                       args.store, generate)
+                                       args.store, insight_generator)
         elif args.command == 'search':
             from seo_agent.web import search_web
             result = search_web(args.query, endpoint=args.endpoint, language=args.language, limit=args.limit)

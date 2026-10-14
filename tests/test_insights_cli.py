@@ -276,6 +276,56 @@ class InsightsCLI(unittest.TestCase):
         self.assertEqual(first['result']['knowledge'], second['result']['knowledge'])
         self.assertNotEqual(first['run_id'], second['run_id'])
 
+    def test_insights_file_controls_insights_without_running_model(self):
+        self.build_pipeline()
+        insights_file = self.directory / 'insights.json'
+        insights_file.write_text(json.dumps(self.insights(), ensure_ascii=False), encoding='utf-8')
+        record = self.invoke('insights', '--project-id', 'horta', '--store', str(self.store),
+                             '--insights-file', str(insights_file))
+        self.assertEqual(record['status'], 'generated')
+        self.assertEqual(record['result']['insights'], self.insights())
+
+    def test_model_path_sends_compact_knowledge_through_opencode_contract(self):
+        from types import SimpleNamespace
+        self.build_pipeline()
+        prompts = []
+
+        def model_runner(command, **options):
+            config = json.loads(options['env']['OPENCODE_CONFIG_CONTENT'])
+            self.assertEqual(config['permission'], {'*': 'deny'})
+            self.assertIn('--pure', command)
+            self.assertIn('seo-insights', command)
+            prompts.append(options['input'])
+            return SimpleNamespace(returncode=0, stdout=json.dumps(
+                {'type': 'text', 'part': {'text': json.dumps(self.insights())}}))
+
+        record = self.invoke('insights', '--project-id', 'horta', '--store', str(self.store),
+                             '--model', 'ollama/fixture', model_runner=model_runner)
+        self.assertEqual(record['status'], 'generated')
+        self.assertEqual(record['result']['insights'], self.insights())
+        self.assertEqual(record['result']['generator'],
+                         {'backend': 'opencode', 'model': 'ollama/fixture',
+                          'tools': 'denied', 'status': 'validated'})
+        [prompt] = prompts
+        self.assertIn('"network"', prompt)
+        self.assertIn('"knowledge"', prompt)
+        for raw in ('Cultivar uma horta em casa exige escolher vasos',
+                    'Plantar mudas em vaso começa pela escolha'):
+            self.assertNotIn(raw, prompt)
+
+    def test_model_tool_attempt_is_recorded_as_invalid_insights(self):
+        from types import SimpleNamespace
+        self.build_pipeline()
+
+        def model_runner(command, **options):
+            return SimpleNamespace(returncode=0, stdout=json.dumps({'type': 'tool_use'}))
+
+        record = self.invoke('insights', '--project-id', 'horta', '--store', str(self.store),
+                             '--model', 'ollama/fixture', model_runner=model_runner)
+        self.assertEqual(record['status'], 'invalid_insights')
+        self.assertEqual(record['result']['generator']['status'], 'error_or_tool_attempt')
+        self.assertEqual(record['result']['errors'][0]['stage'], 'generation')
+
 
 if __name__ == '__main__':
     unittest.main()
