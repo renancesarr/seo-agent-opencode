@@ -386,6 +386,26 @@ Implementação local de #10–#16 em 13/10/2026, ainda sujeita a review cruzado
   diretório 15 links/razão de âncoras 0,91/ItemList → listing 8; ficha 29
   palavras/Organization → profile 6). Suíte:
   `python -m unittest discover -s tests -q` → 134 OK (1 skip), sem rede/LLM.
+- Ticket #28 implementado na zcode-t28 (spec #23, T07): comando `rank` pontua a
+  relevância de cada fonte e tema da extração mais recente com ranking linear
+  determinístico — ML clássico local, pesos fixos auditáveis em `WEIGHTS`
+  (autor 1, datas 1, texto >= 300 palavras 3, >= 3 headings 2, JSON-LD
+  presente 2, links recebidos 1 por página distinta do corpus com teto de 3),
+  sem aleatoriedade nem semente. O sinal de rede deriva do próprio conjunto
+  válido da extração (mesma semântica deduplicada de `links_to`), não da rede
+  persistida: `rank` roda logo após `extract`, sempre coerente com o
+  `extraction_run_id` pontuado. Cada fonte sai com `factors`
+  {signal, value, weight, points} cuja soma é o score; cada tema (heading
+  normalizado, critério de `term` da rede) soma os scores das fontes que o
+  cobrem com as URLs-fonte. Ordenações determinísticas (score decrescente,
+  depois alfabético); pendência explícita com motivo para fonte sem texto
+  (status `partial`, não erro); falha parcial em `excluded`; só falhas →
+  `empty`; reexecução idêntica. Evidência do método: fixtures de relevância
+  conhecida ranqueiam na ordem esperada (guia 364 palavras/4 headings/
+  BlogPosting/2 links recebidos → 11; ficha Organization com 1 link recebido
+  → 3; colega autor+data → 2; hub ItemList → 2 com empate desempatado por URL;
+  tema "pragas comuns" 13 = 11 + 2 agregando guia e colega). Suíte:
+  `python -m unittest discover -s tests -q` → 146 OK (1 skip), sem rede/LLM.
 
 Próximo passo operacional: publicar a configuração escolhida, ativar o
 monitoramento após integração aprovada e reproduzir o aceite

@@ -37,9 +37,12 @@ python3 -m seo_agent keywords --project-id horta-local --limit 20
 
 # Classificar o tipo de conteúdo de cada fonte extraída, com justificativa
 python3 -m seo_agent classify --project-id horta-local
+
+# Pontuar a relevância das fontes e temas do corpus extraído, com justificativa
+python3 -m seo_agent rank --project-id horta-local
 ```
 
-`prepare`, `history`, `extract`, `network`, `keywords` e `classify` aceitam `--store <arquivo.sqlite3>` para escolher o
+`prepare`, `history`, `extract`, `network`, `keywords`, `classify` e `rank` aceitam `--store <arquivo.sqlite3>` para escolher o
 armazenamento. O padrão é `data/seo-agent.sqlite3`, relativo ao diretório atual,
 ignorado pelo Git. Use o mesmo arquivo para consultar as execuções registradas.
 Uma consulta sem histórico devolve lista vazia e não cria o banco.
@@ -232,6 +235,59 @@ demais; extração sem fontes válidas devolve `status: "empty"`, o que não é
 erro. As classificações saem em ordem alfabética de URL e reexecuções sobre a
 mesma extração produzem o mesmo resultado — apenas `run_id` e `created_at`
 mudam.
+
+## Score de relevância de fontes e temas
+
+`rank` implementa o score de relevância do [ticket #28](https://github.com/renancesarr/seo-agent-opencode/issues/28)
+e consome somente o histórico local: sem LLM, rede ou serviço externo. Sobre a
+extração registrada mais recente, pontua a relevância de cada fonte e de cada
+tema do corpus e preserva o ranking como nova execução no histórico,
+referenciando `extraction_run_id`.
+
+O método é ML clássico local, da mesma família do `classify`: ranking linear
+determinístico sobre sinais auditáveis já extraídos/computados, com pesos
+fixos no módulo (`WEIGHTS`). Sem aleatoriedade alguma — determinístico por
+construção, sem semente. O score da fonte é a soma das contribuições dos
+fatores:
+
+| Fator | Regra de ativação | Peso |
+|---|---|---|
+| `has_author` | autor extraído (meta/JSON-LD) | 1 |
+| `has_date` | data extraída (meta/time/JSON-LD) | 1 |
+| `substantial_text` | texto com >= 300 palavras | 3 |
+| `structured_headings` | >= 3 headings | 2 |
+| `structured_data` | JSON-LD presente | 2 |
+| `inbound_links` | por link recebido de página distinta do corpus, até 3 | 1 |
+
+O sinal de rede (`inbound_links`) é derivado da própria extração sendo pontuada
+— com a mesma semântica deduplicada das relações `links_to` da rede: cada
+página de origem conta um voto por destino, independentemente de quantas
+âncoras — em vez de consumir a rede persistida. Assim o `rank` funciona logo
+após `extract`, sempre coerente com a execução pontuada, sem exigir
+`network build` e sem risco de pontuar contra uma rede desatualizada.
+
+A explicação é inspecionável por URL: cada fonte sai com `factors`, a lista de
+`{signal, value, weight, points}` — sinal, valor observado, peso aplicado e
+pontos contribuídos — cuja soma é o `score`. O operador vê por que uma página
+ficou à frente da outra e pode auditar ou ajustar os pesos.
+
+O score por tema agrega as fontes que o cobrem: o tema é o texto normalizado
+dos headings (o mesmo critério de `term` da rede) e o score do tema é a soma
+dos scores das fontes cujos headings o mencionam, com a lista `sources` das
+URLs-fonte. As ordenações são determinísticas: fontes por score decrescente e
+depois URL; temas por score decrescente e depois termo; fontes de um tema na
+mesma ordem do ranking.
+
+Página sem texto utilizável sai como pendência com o motivo — não é erro; o
+registro inteiro fica `status: "partial"` para revisão. Página com texto mas
+nenhum fator ativo recebe score 0 normalmente e fecha o ranking. Sem extração
+registrada, `rank` termina em erro (saída 2) sem registrar execução: se o
+projeto já tem URLs coletadas, o erro orienta executar `extract`; se ainda não
+tem nenhuma URL, orienta executar a busca (`run`) primeiro. URL com falha na
+extração fica fora do ranking, com a falha preservada em `excluded`, sem
+derrubar as demais; extração sem fontes válidas devolve `status: "empty"`, o
+que não é erro. Reexecuções sobre a mesma extração produzem os mesmos scores —
+apenas `run_id` e `created_at` mudam.
 
 ## Busca e inspeção
 
