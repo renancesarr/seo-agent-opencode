@@ -146,6 +146,27 @@ class PageExtraction(unittest.TestCase):
             {'source': 'time', 'value': '2026-01-15'},
         ])
 
+    def test_extracts_dates_and_authors_from_json_ld_including_graph(self):
+        page = extract_page('''
+            <head>
+              <script type="application/ld+json">{"@type":"Article",
+                "datePublished": "2026-03-01", "dateModified": "2026-03-02", "dateCreated": "2026-02-28",
+                "author": [{"@type": "Person", "name": " Maria Silva "}, "João Souza", {"@type": "Organization"}]}</script>
+              <script type="application/ld+json">{"@graph": [{"@type": "BlogPosting",
+                "datePublished": "2026-03-01", "author": {"name": "Ana Lima"}}]}</script>
+            </head>
+        ''', 'https://example.org/')
+        self.assertEqual(page['dates'], [
+            {'source': 'json_ld:datePublished', 'value': '2026-03-01'},
+            {'source': 'json_ld:dateModified', 'value': '2026-03-02'},
+            {'source': 'json_ld:dateCreated', 'value': '2026-02-28'},
+        ])
+        self.assertEqual(page['authors'], [
+            {'source': 'json_ld:author', 'value': 'Maria Silva'},
+            {'source': 'json_ld:author', 'value': 'João Souza'},
+            {'source': 'json_ld:author', 'value': 'Ana Lima'},
+        ])
+
     def test_reports_noindex_metadata_with_its_agent_scope(self):
         page = extract_page('''<head>
             <meta name="robots" content="NOINDEX, follow">

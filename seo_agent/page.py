@@ -32,6 +32,41 @@ def _reject_json_constant(value):
     raise ValueError(f'Constante JSON inválida: {value}.')
 
 
+JSON_LD_DATES = ('datePublished', 'dateModified', 'dateCreated')
+
+
+def _json_ld_objects(structured_data):
+    for block in structured_data:
+        graph = block.get('@graph')
+        if isinstance(graph, list):
+            for item in graph:
+                if isinstance(item, dict):
+                    yield item
+        yield block
+
+
+def _signal_values(value):
+    items = value if isinstance(value, list) else [value]
+    for item in items:
+        if isinstance(item, str) and item.strip():
+            yield item.strip()
+        elif isinstance(item, dict):
+            name = item.get('name')
+            if isinstance(name, str) and name.strip():
+                yield name.strip()
+
+
+def _unique_signals(signals):
+    seen = set()
+    unique = []
+    for item in signals:
+        key = (item['source'], item['value'])
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    return unique
+
+
 class _PageParser(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -165,6 +200,14 @@ def extract_page(html: str, url: str) -> dict:
         parser._finish(parser.stack.pop())
     page = parser.page
     base = _http_url(parser.base_href, url) or url
+    for block in _json_ld_objects(page['structured_data']):
+        for key in JSON_LD_DATES:
+            for value in _signal_values(block.get(key)):
+                page['dates'].append({'source': f'json_ld:{key}', 'value': value})
+        for name in _signal_values(block.get('author')):
+            page['authors'].append({'source': 'json_ld:author', 'value': name})
+    page['dates'] = _unique_signals(page['dates'])
+    page['authors'] = _unique_signals(page['authors'])
     page['canonical'] = _http_url(page['canonical'], base)
     page['hreflang'] = [item | {'url': resolved} for item in page['hreflang']
                         if (resolved := _http_url(item['url'], base))]
