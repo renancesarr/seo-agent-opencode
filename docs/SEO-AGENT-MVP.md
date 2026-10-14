@@ -102,8 +102,10 @@ Antes de ativar o monitoramento, definir: horário e fuso, limites de consultas,
 páginas e tempo por execução, comportamento quando a máquina estiver desligada,
 canal de aviso e local de revisão. O usuário atualizou a frequência para duas
 rodadas por dia, às 8h e 20h, America/Sao_Paulo, com teto de 10 consultas,
-20 páginas e 15 minutos, pulando horários perdidos. O arquivo do projeto de
-monitoramento precisa ser escolhido antes da ativação; veja
+20 páginas e 15 minutos, pulando horários perdidos. O projeto escolhido está em
+`examples/igrejas-go.json`, com nove consultas para as três cidades. O usuário
+reduziu o intervalo desse projeto para um minuto, preservando o teto de 15 minutos.
+Para operação, veja
 [FLUXO-PROJETO.md](FLUXO-PROJETO.md).
 
 O desenvolvedor deve registrar a escolha de persistência, leitor de páginas,

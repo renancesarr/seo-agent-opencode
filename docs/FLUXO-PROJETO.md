@@ -85,9 +85,10 @@ O mesmo fato inalterado não é avisado novamente. Não há envio externo.
 ## Agendamento explícito
 
 O usuário definiu 8h e 20h, fuso `America/Sao_Paulo`, 10 consultas, 20 páginas,
-15 minutos e descarte dos horários perdidos. Falta escolher o arquivo do projeto
-para ativar; o exemplo de horta não foi escolhido para monitoramento. Configuração
-confirmada, sem instalar ou iniciar job:
+15 minutos, intervalo de um minuto entre consultas e descarte dos horários perdidos. O projeto escolhido é
+`examples/igrejas-go.json`: nove consultas, três tipos de igrejas nas três cidades.
+A configuração correspondente está em `examples/schedule-igrejas-go.json`.
+Nenhum serviço permanente foi instalado nesta entrega. Configuração confirmada:
 
 ```json
 {
@@ -98,6 +99,7 @@ confirmada, sem instalar ou iniciar job:
   "max_queries": 10,
   "max_pages": 20,
   "max_seconds": 900,
+  "interval_seconds": 60,
   "recovery": "skip",
   "model": "ollama/gemma4:e4b",
   "env_file": "../.env",
@@ -124,6 +126,23 @@ store: use um único store operacional para não separar o controle de concorrê
 Após encerramento abrupto do monitor, o horário pode permanecer reclamado;
 investigue pelo histórico e repita manualmente, sem apagar o controle de horários.
 Não houve instalação de serviço nem ativação permanente nesta implementação.
+
+### Projeto escolhido: igrejas em Goiás
+
+```bash
+python3 -B -m seo_agent validate --project examples/igrejas-go.json
+python3 -B -m seo_agent run --project examples/igrejas-go.json --store data/igrejas-go.sqlite3 --model ollama/gemma4:e4b --max-pages 20 --max-queries 10 --interval-seconds 60
+python3 -B -m seo_agent monitor --config examples/schedule-igrejas-go.json
+```
+
+Morrinhos, Piracanjuba e Goiatuba recebem consultas gerais, evangélicas e
+católicas. Os quatro domínios são contexto do projeto, não fontes já publicadas.
+Busca e leitura descobrem candidatos; eventos só entram quando houver evidência.
+O usuário reduziu o intervalo deste projeto para um minuto: as nove consultas
+têm oito minutos de espera, mantendo 15 minutos de teto. Coleta e modelo ainda
+podem exceder o restante; nesse caso o scheduler registra falha e conserva a
+versão anterior, sem prometer conclusão de toda rodada. Sem configuração de
+intervalo, outros agendamentos preservam o padrão anterior de 300 segundos.
 
 Contrato técnico do OpenCode conferido nas docs de
 [configuração](https://opencode.ai/docs/config/),

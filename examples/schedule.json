@@ -6,6 +6,7 @@
   "max_queries": 10,
   "max_pages": 20,
   "max_seconds": 900,
+  "interval_seconds": 60,
   "recovery": "skip",
   "model": "ollama/gemma4:e4b",
   "env_file": "../.env",

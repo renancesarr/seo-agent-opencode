@@ -54,7 +54,7 @@ def schedule_tick(config_file, *, clock=None, worker=None):
     from seo_agent.__main__ import validate_project, prepare_run
     config = json.loads(config_file.read_text(encoding='utf-8'))
     fields = {'project', 'store', 'hours', 'timezone', 'max_queries', 'max_pages', 'max_seconds',
-              'recovery', 'model', 'no_searxng', 'env_file'}
+              'recovery', 'model', 'no_searxng', 'env_file', 'interval_seconds'}
     if not isinstance(config, dict) or config.keys() - fields:
         raise ValueError('Configuração de agendamento inválida.')
     for field in ('project', 'store', 'timezone', 'model'):
@@ -68,6 +68,8 @@ def schedule_tick(config_file, *, clock=None, worker=None):
     for field in ('max_queries', 'max_pages', 'max_seconds'):
         if type(config.get(field)) is not int or config[field] < 1:
             raise ValueError(f'Agendamento exige {field} inteiro positivo.')
+    if type(config.get('interval_seconds', 300)) is not int or config.get('interval_seconds', 300) < 0:
+        raise ValueError('interval_seconds deve ser inteiro não negativo.')
     if '/' not in config['model'] or type(config.get('no_searxng', False)) is not bool:
         raise ValueError('Defina modelo provedor/modelo e no_searxng booleano.')
     try:
@@ -97,7 +99,8 @@ def schedule_tick(config_file, *, clock=None, worker=None):
             return {'status': 'already_claimed', 'slot': slot}
     command = [sys.executable, '-B', '-m', 'seo_agent', 'run', '--project', str(project_file),
                '--store', str(store), '--model', config['model'], '--max-pages', str(config['max_pages']),
-               '--max-queries', str(config['max_queries'])]
+               '--max-queries', str(config['max_queries']),
+               '--interval-seconds', str(config.get('interval_seconds', 300))]
     if config.get('no_searxng'):
         command.append('--no-searxng')
     command += ['--env-file', str((config_file.parent / config.get('env_file', '.env')).resolve())]

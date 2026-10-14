@@ -1,0 +1,27 @@
+{
+  "id": "igrejas-go-piloto",
+  "business_context": "Planejamento de portais para encontrar igrejas e informações úteis em Morrinhos, Piracanjuba e Goiatuba, Goiás. Igrejas Brasil reúne busca e resumos; subportais católico e evangélico possuem fichas específicas com cadastro compartilhado. Os sites ainda não estão publicados. Considerar celebrações, encontros, festas, atividades culturais e projetos sociais com fonte, local e data verificados.",
+  "audience": "Moradores e visitantes das três cidades que procuram igrejas, horários, localização, eventos e ações comunitárias.",
+  "language": "pt-BR",
+  "geography": "Goiás, Brasil",
+  "keywords": [
+    "igrejas em Morrinhos",
+    "igrejas evangélicas em Morrinhos",
+    "igrejas católicas em Morrinhos",
+    "igrejas em Piracanjuba",
+    "igrejas evangélicas em Piracanjuba",
+    "igrejas católicas em Piracanjuba",
+    "igrejas em Goiatuba",
+    "igrejas evangélicas em Goiatuba",
+    "igrejas católicas em Goiatuba"
+  ],
+  "content_goal": "Produzir pesquisa, oportunidades justificadas e outlines para aprovação humana, incluindo pautas de eventos quando houver evidência. Não publicar automaticamente, não inventar horários ou datas e não tratar frequência nas buscas como volume comprovado.",
+  "domains": [
+    "igrejasbrasil.com.br",
+    "igrejasevangelicas.com.br",
+    "igrejascatolicas.com.br",
+    "igrejasnobrasil.com.br"
+  ],
+  "competitors": [],
+  "sources": []
+}

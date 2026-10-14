@@ -309,9 +309,9 @@ Implementação local de #10–#16 em 13/10/2026, ainda sujeita a review cruzado
   Smoke real único em configuração temporária: horário `2026-10-13T18:01:00-03:00`,
   execução `5c007d32-d15b-48d6-bf94-24c578d7dc28`, `run_status=collected`,
   gerador validado com Gemma. Repetição retornou `already_claimed`.
-  Monitoramento permanente não ativado; arquivo do projeto operacional ainda
-  não escolhido. Confirmados: America/Sao_Paulo, 10 consultas, 20 páginas,
-  900 segundos e `skip` para horários perdidos.
+  Monitoramento permanente não ativado. Projeto operacional escolhido:
+  `examples/igrejas-go.json`. Confirmados: America/Sao_Paulo, 10 consultas, 20 páginas,
+  900 segundos, intervalo de 60 segundos e `skip` para horários perdidos.
 - #18 parcialmente implementado: cinco capturas por cenário/motor, HTML/SEO,
   tempo e status separados. Baseline inicial é Chromium remoto, não equivalência
   comprovada com o crawler local. Cloudflare sem conta/token; aceite remoto e
@@ -332,7 +332,8 @@ Implementação local de #10–#16 em 13/10/2026, ainda sujeita a review cruzado
   e conservou a proposta válida anterior no mesmo histórico. Configuração temporária,
   sem ativação permanente e sem credenciais Cloudflare.
 
-Próximo passo operacional: escolher projeto do monitoramento e reproduzir o aceite
+Próximo passo operacional: publicar a configuração escolhida, ativar o
+monitoramento após integração aprovada e reproduzir o aceite
 de #17; para #18, fornecer credenciais locais e hospedar fixtures controladas.
 Issues implementadas só são integradas após PR aprovado pelo agente oposto.
 

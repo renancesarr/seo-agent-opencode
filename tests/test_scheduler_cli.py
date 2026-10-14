@@ -18,7 +18,7 @@ class SchedulerCLI(unittest.TestCase):
             (root / 'project.json').write_text(json.dumps(project))
             config = {'project': 'project.json', 'store': 'history.sqlite3', 'hours': ['08:00', '20:00'],
                       'timezone': 'America/Sao_Paulo', 'max_queries': 10, 'max_pages': 20, 'max_seconds': 900,
-                      'recovery': 'once', 'model': 'ollama/fixture', 'no_searxng': True}
+                      'recovery': 'once', 'model': 'ollama/fixture', 'no_searxng': True, 'interval_seconds': 60}
             path = root / 'schedule.json'
             path.write_text(json.dumps(config))
             calls = []
@@ -37,6 +37,8 @@ class SchedulerCLI(unittest.TestCase):
             self.assertEqual(len(calls), 2)
             self.assertEqual(calls[0][1], 900)
             self.assertIn('run', calls[0][0])
+            interval_flag = calls[0][0].index('--interval-seconds')
+            self.assertEqual(calls[0][0][interval_flag + 1], '60')
             def failed_worker(*args):
                 raise ValueError('timeout simulado')
             with redirect_stdout(io.StringIO()) as output:
