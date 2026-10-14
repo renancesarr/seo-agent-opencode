@@ -253,6 +253,21 @@ class ClassifyCLI(unittest.TestCase):
         self.assertEqual(record['result']['classifications'], [])
         self.assertEqual(len(record['result']['excluded']), 1)
 
+    def test_score_tie_resolves_alphabetically_deterministically(self):
+        from seo_agent.classify import classify_source
+        page = {
+            'text': ' '.join(['horta'] * 320 + ['como plantar mudas em vasos'] * 10),
+            'headings': [{'level': 2, 'text': f'Tema {number}'} for number in range(3)],
+            'links': [{'url': f'https://example.org/l{number}', 'text': 'guia de horta em vasos ' * 4}
+                      for number in range(12)],
+            'authors': [], 'dates': [], 'structured_data': [],
+        }
+        first = classify_source({'url': 'https://example.org/empate', 'page': page})
+        second = classify_source({'url': 'https://example.org/empate', 'page': page})
+        self.assertEqual(first['scores'], {'article': 5, 'listing': 5, 'profile': 0})
+        self.assertEqual(first['type'], 'article')
+        self.assertEqual(first, second)
+
 
 if __name__ == '__main__':
     unittest.main()
