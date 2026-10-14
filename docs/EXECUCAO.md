@@ -356,6 +356,19 @@ Implementação local de #10–#16 em 13/10/2026, ainda sujeita a review cruzado
   `query --compact` devolve contagens e principais termos/links com fontes,
   menor que a soma do texto bruto (verificado com fixtures reais). Suíte:
   `python -m unittest discover -s tests -q` → 110 OK (1 skip), sem rede/LLM.
+- Ticket #26 implementado na zcode-t26 (spec #23, T07): comando `keywords`
+  descobre palavras-chave sobre o texto preservado pela extração mais recente,
+  sem LLM e com Python stdlib: n-gramas de cauda longa (bi/trigramas com bordas
+  de conteúdo, lista mínima de stopwords pt-BR só de palavras gramaticais),
+  pares de termos coorrentes em >= 2 páginas (`a + b` alfabético) e perguntas
+  do texto (headings incluídos no texto preservado). Cada termo sai com
+  `sources` (URLs) e o registro referencia `extraction_run_id`; keywords do
+  projeto derivadas do snapshot mais recente marcam `is_new` por igualdade
+  normalizada. Condição de entrada igual ao `network build` (sem URLs → `run`;
+  com URLs sem extração → `extract`, nada registrado); falha parcial exclui a
+  URL com a falha em `excluded`; ordenação por frequência decrescente e
+  alfabética, `--limit` padrão 50; reexecução idêntica. Suíte:
+  `python -m unittest discover -s tests -q` → 124 OK (1 skip), sem rede/LLM.
 
 Próximo passo operacional: publicar a configuração escolhida, ativar o
 monitoramento após integração aprovada e reproduzir o aceite

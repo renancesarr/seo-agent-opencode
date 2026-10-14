@@ -28,9 +28,15 @@ python3 -m seo_agent network query --project-id horta-local
 
 # Resumo compacto da rede, pensado para consumir menos tokens
 python3 -m seo_agent network query --project-id horta-local --compact
+
+# Descobrir palavras-chave no corpus extraído, com fonte por termo
+python3 -m seo_agent keywords --project-id horta-local
+
+# Limitar a lista de descobertos (padrão 50)
+python3 -m seo_agent keywords --project-id horta-local --limit 20
 ```
 
-`prepare`, `history`, `extract` e `network` aceitam `--store <arquivo.sqlite3>` para escolher o
+`prepare`, `history`, `extract`, `network` e `keywords` aceitam `--store <arquivo.sqlite3>` para escolher o
 armazenamento. O padrão é `data/seo-agent.sqlite3`, relativo ao diretório atual,
 ignorado pelo Git. Use o mesmo arquivo para consultar as execuções registradas.
 Uma consulta sem histórico devolve lista vazia e não cria o banco.
@@ -131,6 +137,50 @@ os 20 primeiros links — as listas são limitadas para o resumo continuar compa
 em corpora grandes; cresce com a estrutura da rede, não com o
 texto das páginas, e é menor que a soma do texto bruto do corpus — é a forma
 pensada para alimentar uma LLM pagando menos tokens.
+
+## Descoberta de palavras-chave do corpus
+
+`keywords` implementa a descoberta do [ticket #26](https://github.com/renancesarr/seo-agent-opencode/issues/26)
+e consome somente o histórico local: sem LLM, rede ou serviço externo. Sobre o
+texto extraído preservado pela extração mais recente, descobre de forma
+determinística três tipos de termos, cada um com a lista de URLs-fonte que o
+sustenta — termo sem fonte no corpus não existe — e o registro referencia
+`extraction_run_id`, a execução de extração da qual a descoberta foi derivada:
+
+- `long_tail`: bigramas e trigramas de cauda longa com ao menos duas ocorrências
+  no corpus. A normalização é simples (minúsculas, sem pontuação, acentos
+  preservados) e o n-grama precisa começar e terminar em termo de conteúdo;
+  preposições internas são mantidas para a frase continuar natural
+  ("horta em casa"). Uma lista mínima de stopwords em pt-BR — apenas artigos,
+  preposições, conjunções e cópulas — delimita essas bordas; interrogativos
+  (como, quando, onde) ficam fora da lista porque encabeçam cauda longa valiosa.
+- `co_occurrence`: pares de termos de conteúdo que aparecem juntos em ao menos
+  duas páginas do corpus, renderizados como `primeiro + segundo` em ordem
+  alfabética. A frequência conta páginas, não ocorrências.
+- `question`: perguntas presentes no texto preservado (segmentos com "?"),
+  normalizadas sem o ponto de interrogação. O texto dos headings já faz parte
+  do texto preservado, então headings de pergunta também aparecem aqui.
+
+Cada item sai com `kind`, `term`, `frequency`, `sources` (URLs) e `is_new`. O
+cruzamento com as palavras-chave originais do projeto — derivadas do snapshot
+mais recente registrado no histórico — marca `is_new: false` apenas quando o
+termo normalizado é igual a uma keyword normalizada (maiúsculas/pontuação
+ignoradas). Refinamentos que apenas contêm uma keyword planejada continuam
+novos: a cauda longa além do que o operador planejou é justamente o alvo.
+
+A descoberta é preservada como nova execução no histórico, sem destruir as
+anteriores. A lista sai ordenada por frequência decrescente, depois alfabética
+(tipo como desempate final), limitada por `--limit` (padrão 50) para não virar
+dump do corpus; `--limit 0` devolve lista vazia e valores negativos são
+rejeitados. Reexecutar sobre a mesma extração produz a mesma descoberta —
+apenas `run_id` e `created_at` mudam.
+
+Sem extração registrada, `keywords` termina em erro (saída 2) sem registrar
+execução: se o projeto já tem URLs coletadas, o erro orienta executar `extract`;
+se ainda não tem nenhuma URL, orienta executar a busca (`run`) primeiro. URL
+com falha na extração fica fora da descoberta, com a falha preservada em
+`excluded`, sem derrubar as demais; extração sem fontes válidas devolve
+`status: "empty"` com lista vazia, o que não é erro.
 
 ## Busca e inspeção
 
