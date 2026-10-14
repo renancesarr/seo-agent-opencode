@@ -8,6 +8,7 @@ from urllib.parse import urljoin, urlsplit
 VOID_TAGS = set('area base br col embed hr img input link meta param source track wbr'.split())
 BLOCK_TAGS = set('address article aside blockquote br div dl dt dd footer form h1 h2 h3 h4 h5 h6 header hr li main nav ol p pre section table td th tr ul'.split())
 HEADINGS = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
+DATE_META = {'article:published_time', 'article:modified_time'}
 
 
 def _normalize(text):
@@ -37,6 +38,7 @@ class _PageParser(HTMLParser):
         self.page = {
             'title': None, 'description': None, 'language': None, 'canonical': None,
             'headings': [], 'robots': [], 'social': {}, 'hreflang': [], 'links': [],
+            'dates': [], 'authors': [],
             'structured_data': [], 'structured_data_errors': [],
             'images': [], 'issues': [],
         }
@@ -66,6 +68,10 @@ class _PageParser(HTMLParser):
                 self.page['robots'].append(content)
             elif name.startswith(('og:', 'twitter:')):
                 self.page['social'][name] = content
+            if name == 'author' and content:
+                self.page['authors'].append({'source': 'meta:author', 'value': content})
+            if name in DATE_META and content:
+                self.page['dates'].append({'source': f'meta:{name}', 'value': content})
             if name in {'robots', 'googlebot'} and {'noindex', 'none'} & set(content.lower().replace(',', ' ').split()):
                 self.page['issues'].append({
                     'code': 'meta_noindex', 'severity': 'info',
@@ -82,6 +88,10 @@ class _PageParser(HTMLParser):
             self.page['images'].append({
                 'src': attrs.get('src'), 'alt': (attrs['alt'] or '') if 'alt' in attrs else None,
             })
+        if tag == 'time' and not hidden:
+            datetime_value = _normalize(attrs.get('datetime') or '')
+            if datetime_value:
+                self.page['dates'].append({'source': 'time', 'value': datetime_value})
         if tag in BLOCK_TAGS and not hidden:
             self._separate_text()
         capture = tag == 'title' or (tag in HEADINGS | {'a'} and not hidden)
