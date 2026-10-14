@@ -16,6 +16,9 @@ python3 -m seo_agent prepare --project examples/projeto.json
 
 # Recuperar as execuções desse projeto, em ordem de registro
 python3 -m seo_agent history --project-id horta-local
+
+# Extrair de forma determinística as URLs já coletadas do projeto
+python3 -m seo_agent extract --project-id horta-local
 ```
 
 `prepare` e `history` aceitam `--store <arquivo.sqlite3>` para escolher o
@@ -64,6 +67,27 @@ O estado preparado significa que a entrada foi validada e registrada. Busca,
 leitura e inspeção podem ser executadas separadamente com os comandos abaixo.
 O fluxo por projeto, a análise por modelo, o outline e a revisão permanecem
 pendentes. `prepare` não dispara essas etapas.
+
+## Extração determinística das fontes coletadas
+
+`extract` implementa a extração do [ticket #24](https://github.com/renancesarr/seo-agent-opencode/issues/24)
+e consome somente o histórico local: sem LLM, rede ou serviço externo. Sem URLs
+coletadas no histórico do projeto, devolve `status: no_sources` com mensagem
+orientando executar a busca antes, sem registrar execução. Com fontes, extrai de
+cada URL o máximo possível do conteúdo já preservado pela coleta: texto,
+título/descrição, idioma, headings, links, imagens/alt, JSON-LD, metadados
+(robots, social, hreflang, canonical) e, com a origem registrada por sinal,
+datas (meta `article:published_time`/`article:modified_time`, atributo
+`datetime` de `time` e `datePublished`/`dateModified`/`dateCreated` do JSON-LD,
+inclusive em `@graph`) e autores (meta `author` e `author` do JSON-LD).
+
+O resultado por URL — `source_id`, `retrieved_at`, `page` e `failures` — é
+preservado como nova execução no histórico, sem destruir as anteriores. Para
+URLs recoletadas vale a página preservada mais recente; a saída lista as
+extrações em ordem alfabética de URL. Falha de uma URL (página preservada
+ilegível) fica registrada em `failures` com o estágio, sem derrubar as demais;
+ausência de sinal (por exemplo, página sem autor) não é erro. Reexecutar sobre
+as mesmas fontes produz a mesma extração: apenas `run_id` e `created_at` mudam.
 
 ## Busca e inspeção
 
@@ -137,7 +161,8 @@ mais um sitemap do host final. Não segue links encontrados. O relatório inclui
 - `domain`: hostname, endereços resolvidos A/AAAA e expiração do certificado TLS
   verificado quando HTTPS; não é inventário DNS, WHOIS ou data de expiração do domínio.
 - `page`: texto, título, descrição, idioma, headings, canonical, robots,
-  hreflang, social tags, links internos/externos, imagens/alt e JSON-LD.
+  hreflang, social tags, links internos/externos, imagens/alt, datas, autores
+  e JSON-LD.
 - `robots`: regras recebidas, sitemaps declarados e permissão observada para
   SEOAgent. É uma observação posterior à auditoria explícita, não aplicação de
   política de um crawler automático. A avaliação usa urllib.robotparser e não é uma implementação completa do
