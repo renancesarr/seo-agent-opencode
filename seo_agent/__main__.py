@@ -237,9 +237,12 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
             from seo_agent.extract import extract_project
             result = extract_project(args.project_id, history(args.project_id, args.store)['runs'], args.store)
         elif args.command == 'network':
-            from seo_agent.network import build_network
+            from seo_agent.network import build_network, query_network
+            runs = history(args.project_id, args.store)['runs']
             if args.network_command == 'build':
-                result = build_network(args.project_id, history(args.project_id, args.store)['runs'], args.store)
+                result = build_network(args.project_id, runs, args.store)
+            else:
+                result = query_network(args.project_id, runs, compact=args.compact)
         elif args.command == 'search':
             from seo_agent.web import search_web
             result = search_web(args.query, endpoint=args.endpoint, language=args.language, limit=args.limit)

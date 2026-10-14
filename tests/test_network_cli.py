@@ -131,6 +131,81 @@ class NetworkCLI(unittest.TestCase):
         self.assertNotEqual(first['run_id'], second['run_id'])
         self.assertNotEqual(first['created_at'], second['created_at'])
 
+    def test_partial_failure_excludes_url_with_recorded_failure_and_keeps_others(self):
+        sources = self.extracted_sources() + [
+            {'id': 'fonte-quebrada', 'url': 'https://example.org/broken',
+             'retrieved_at': '2026-03-01T00:00:00+00:00', 'page': None},
+        ]
+        self.record_extraction(sources)
+        record = self.invoke('network', 'build', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(record['status'], 'built')
+        network = record['result']['network']
+        urls = [entity['id'] for entity in network['entities'] if entity['type'] == 'page']
+        self.assertEqual(urls, ['https://example.org/horta', 'https://example.org/plantar'])
+        self.assertNotIn('https://example.org/broken', json.dumps(network))
+        self.assertEqual(record['result']['excluded'], [
+            {'url': 'https://example.org/broken', 'failures': [
+                {'stage': 'page', 'error': 'Página preservada ausente ou ilegível no histórico desta fonte.'}]},
+        ])
+
+    def test_extraction_without_valid_sources_is_empty_status_not_error(self):
+        self.record_extraction([{'id': 'fonte-quebrada', 'url': 'https://example.org/broken',
+                                 'retrieved_at': '2026-03-01T00:00:00+00:00', 'page': None}])
+        record = self.invoke('network', 'build', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(record['status'], 'empty')
+        self.assertEqual(record['result']['network'], {'entities': [], 'relations': []})
+        self.assertEqual(len(record['result']['excluded']), 1)
+
+    def test_query_returns_persisted_network_verbatim(self):
+        self.record_extraction(self.extracted_sources())
+        built = self.invoke('network', 'build', '--project-id', 'horta', '--store', str(self.store))
+        queried = self.invoke('network', 'query', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(queried, built)
+
+    def test_query_without_network_fails_pointing_to_build(self):
+        self.record_extraction(self.extracted_sources())
+        error = self.invoke_error('network', 'query', '--project-id', 'horta', '--store', str(self.store))
+        self.assertIn('Nenhuma rede registrada', error)
+        self.assertIn('network build', error)
+        self.assertNotIn('Traceback', error)
+
+    def test_every_fact_in_full_and_compact_queries_carries_corpus_source_urls(self):
+        sources = self.extracted_sources() + [
+            {'id': 'fonte-quebrada', 'url': 'https://example.org/broken',
+             'retrieved_at': '2026-03-01T00:00:00+00:00', 'page': None},
+        ]
+        self.record_extraction(sources)
+        self.invoke('network', 'build', '--project-id', 'horta', '--store', str(self.store))
+        full = self.invoke('network', 'query', '--project-id', 'horta', '--store', str(self.store))
+        compact = self.invoke('network', 'query', '--project-id', 'horta', '--store', str(self.store),
+                              '--compact')
+        network = full['result']['network']
+        pages = {entity['id'] for entity in network['entities'] if entity['type'] == 'page'}
+        ids = {entity['id'] for entity in network['entities']}
+        facts = list(network['entities']) + list(network['relations']) \
+            + list(compact['compact']['top_terms']) + list(compact['compact']['page_links'])
+        for fact in facts:
+            self.assertTrue(fact.get('sources'), f'Fato sem fonte: {fact}')
+            self.assertTrue(set(fact['sources']) <= pages, f'Fonte fora do corpus: {fact}')
+        for relation in network['relations']:
+            self.assertIn(relation['from'], ids)
+            self.assertIn(relation['to'], ids)
+        self.assertNotEqual(pages, set())
+        self.assertNotIn('https://example.org/broken', pages)
+
+    def test_compact_query_is_smaller_than_raw_page_text(self):
+        extraction = self.record_extraction(self.extracted_sources())
+        self.invoke('network', 'build', '--project-id', 'horta', '--store', str(self.store))
+        compact = self.invoke('network', 'query', '--project-id', 'horta', '--store', str(self.store),
+                              '--compact')
+        self.assertEqual(compact['status'], 'built')
+        self.assertEqual(compact['compact']['counts'],
+                         {'pages': 2, 'terms': 3, 'page_links': 2, 'term_relations': 4})
+        [top_term] = [term for term in compact['compact']['top_terms'] if term['term'] == 'como plantar']
+        self.assertEqual(top_term['pages'], 2)
+        raw_text = sum(len(item['page']['text']) for item in extraction['result']['extractions'])
+        self.assertLess(len(json.dumps(compact, ensure_ascii=False)), raw_text)
+
 
 if __name__ == '__main__':
     unittest.main()

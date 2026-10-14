@@ -6,6 +6,8 @@ from uuid import uuid4
 
 NO_EXTRACTION_MESSAGE = ('Nenhuma extração registrada no histórico deste projeto; '
                          'execute o comando extract antes de construir a rede.')
+NO_NETWORK_MESSAGE = ('Nenhuma rede registrada no histórico deste projeto; '
+                      'execute o comando network build antes de consultar.')
 
 
 def latest_extraction(runs):
@@ -66,4 +68,44 @@ def build_network(project_id, runs, store):
                          'excluded': excluded}}
     from seo_agent.store import save_run
     save_run(record, store)
+    return record
+
+
+def latest_network(runs):
+    for run in reversed(runs):
+        if (run.get('result') or {}).get('network') is not None:
+            return run
+    return None
+
+
+def compact_network(network):
+    """Resume a rede em contagens e principais termos/relações, com fontes.
+
+    Destinada a reduzir tokens: contém apenas fatos agregados, nunca o texto
+    das páginas; o tamanho acompanha a estrutura da rede, não o corpus bruto.
+    """
+    pages = [entity for entity in network['entities'] if entity['type'] == 'page']
+    terms = [entity for entity in network['entities'] if entity['type'] == 'term']
+    links = [relation for relation in network['relations'] if relation['type'] == 'links_to']
+    term_relations = [relation for relation in network['relations'] if relation['type'] == 'has_term']
+    top_terms = sorted(({'term': entity['id'], 'pages': len(entity['sources']),
+                         'sources': entity['sources']} for entity in terms),
+                       key=lambda item: (-item['pages'], item['term']))
+    return {
+        'counts': {'pages': len(pages), 'terms': len(terms),
+                   'page_links': len(links), 'term_relations': len(term_relations)},
+        'top_terms': top_terms,
+        'page_links': [{'from': relation['from'], 'to': relation['to'],
+                        'sources': relation['sources']} for relation in links],
+    }
+
+
+def query_network(project_id, runs, *, compact=False):
+    """Devolve a rede registrada, sem derivar nada novamente."""
+    record = latest_network(runs)
+    if record is None:
+        raise ValueError(NO_NETWORK_MESSAGE)
+    if compact:
+        return {key: value for key, value in record.items() if key != 'result'} | {
+            'compact': compact_network(record['result']['network'])}
     return record
