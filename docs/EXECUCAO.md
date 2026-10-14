@@ -78,6 +78,12 @@ quando seus critérios de aceite completos forem demonstrados.
 | [#17](https://github.com/renancesarr/seo-agent-opencode/issues/17) | Aceite operacional do MVP | #16 | T06 |
 | [#18](https://github.com/renancesarr/seo-agent-opencode/issues/18) | Captura DOM Kitesurf versus Chromium | — | B01 |
 | [#19](https://github.com/renancesarr/seo-agent-opencode/issues/19) | Busca Kitesurf e fallback | #18 | B01 |
+| [#24](https://github.com/renancesarr/seo-agent-opencode/issues/24) | Extração total e determinística das URLs coletadas | — | T07 |
+| [#25](https://github.com/renancesarr/seo-agent-opencode/issues/25) | Rede de conhecimento consultável offline | #24 | T07 |
+| [#26](https://github.com/renancesarr/seo-agent-opencode/issues/26) | Descoberta de palavras-chave com fonte | #24 | T07 |
+| [#27](https://github.com/renancesarr/seo-agent-opencode/issues/27) | Classificação de tipos por ML clássico | #24 | T07 |
+| [#28](https://github.com/renancesarr/seo-agent-opencode/issues/28) | Score de relevância por ML clássico | #24 | T07 |
+| [#29](https://github.com/renancesarr/seo-agent-opencode/issues/29) | Insights por LLM sobre a rede compacta | #25, #26, #27, #28 | T07 |
 
 Fronteira inicial: #10 e #18. Prioridade do produto: #10. B01 é experimental e
 não bloqueia o MVP. Os tickets não foram implementados nesta publicação.
@@ -331,6 +337,15 @@ Implementação local de #10–#16 em 13/10/2026, ainda sujeita a review cruzado
   `2026-10-13T18:10:00-03:00`, gravou falha `1f478977-2982-4805-b7dc-f45b6413c4e8`
   e conservou a proposta válida anterior no mesmo histórico. Configuração temporária,
   sem ativação permanente e sem credenciais Cloudflare.
+
+- Ticket #24 implementado na zcode-ai (spec #23, T07): comando `extract` com
+  condição de entrada (sem fontes → `no_sources` sem registrar nada), extração
+  determinística sem LLM das páginas preservadas (datas/autores de meta/time/
+  JSON-LD com origem por sinal), falhas por estágio (`page`, `structured_data`),
+  ausência ≠ erro e reexecução idêntica. Code review dois eixos: DDL/INSERT
+  unificado em helper de store; página vazia vira falha; docs atualizados.
+  Verificação: `python3 -m unittest discover -s tests -q` → 101 OK (1 skip),
+  sem rede/LLM. PR único da spec #23 para dev-ai ao concluir #24–#29.
 
 Próximo passo operacional: publicar a configuração escolhida, ativar o
 monitoramento após integração aprovada e reproduzir o aceite
