@@ -209,6 +209,65 @@ class RankCLI(unittest.TestCase):
             {'term': 'pragas comuns em varandas', 'score': 2, 'sources': ['https://example.org/colega']},
         ])
 
+    def test_page_without_usable_text_is_pending_not_error(self):
+        self.record_extraction(self.ranked_sources() + [self.extra_source('vazia', VAZIA_HTML)])
+        record = self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(record['status'], 'partial')
+        by_url = {item['url']: item for item in record['result']['sources']}
+        self.assertEqual(by_url['https://example.org/vazia'],
+                         {'url': 'https://example.org/vazia',
+                          'reason': 'Página sem texto utilizável para pontuar.'})
+        self.assertEqual(by_url['https://example.org/guia']['score'], 11)
+        self.assertEqual(record['result']['sources'][-1]['url'], 'https://example.org/vazia')
+        theme_sources = [url for theme in record['result']['themes'] for url in theme['sources']]
+        self.assertNotIn('https://example.org/vazia', theme_sources)
+
+    def test_partial_failure_excludes_url_and_keeps_others_ranked(self):
+        sources = self.ranked_sources() + [
+            {'id': 'fonte-quebrada', 'url': 'https://example.org/broken',
+             'retrieved_at': '2026-03-01T00:00:00+00:00', 'page': None},
+        ]
+        self.record_extraction(sources)
+        record = self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(record['status'], 'ranked')
+        self.assertEqual([item['url'] for item in record['result']['sources']],
+                         ['https://example.org/guia', 'https://example.org/ficha',
+                          'https://example.org/colega', 'https://example.org/hub'])
+        self.assertEqual(record['result']['excluded'], [
+            {'url': 'https://example.org/broken', 'failures': [
+                {'stage': 'page', 'error': 'Página preservada ausente ou ilegível no histórico desta fonte.'}]},
+        ])
+
+    def test_extraction_without_valid_sources_is_empty_status_not_error(self):
+        self.record_extraction([{'id': 'fonte-quebrada', 'url': 'https://example.org/broken',
+                                 'retrieved_at': '2026-03-01T00:00:00+00:00', 'page': None}])
+        record = self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(record['status'], 'empty')
+        self.assertEqual(record['result']['sources'], [])
+        self.assertEqual(record['result']['themes'], [])
+        self.assertEqual(len(record['result']['excluded']), 1)
+
+    def test_rerank_over_same_extraction_is_identical(self):
+        self.record_extraction(self.ranked_sources())
+        first = self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))
+        second = self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(first['result'], second['result'])
+        self.assertEqual(first['status'], second['status'])
+        self.assertNotEqual(first['run_id'], second['run_id'])
+        self.assertNotEqual(first['created_at'], second['created_at'])
+
+    def test_score_tie_between_identical_pages_resolves_by_url(self):
+        page = {'title': 'Empate', 'headings': [{'level': 1, 'text': 'Empate'}],
+                'links': [], 'authors': [], 'dates': [], 'structured_data': [],
+                'text': 'Página idêntica publicada em dois endereços para conferir o desempate.'}
+        sources = [{'id': f'fonte-{name}', 'url': f'https://example.org/{name}',
+                    'retrieved_at': '2026-03-01T00:00:00+00:00', 'page': dict(page)}
+                   for name in ('empate-b', 'empate-a')]
+        self.record_extraction(sources)
+        record = self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual([(item['url'], item['score']) for item in record['result']['sources']],
+                         [('https://example.org/empate-a', 0), ('https://example.org/empate-b', 0)])
+
 
 if __name__ == '__main__':
     unittest.main()
