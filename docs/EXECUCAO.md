@@ -438,6 +438,15 @@ Implementação local de #10–#16 em 13/10/2026, ainda sujeita a review cruzado
   (pico de memória < 80 MiB verificado por tracemalloc no teste).
   Verificação: `python3 -m unittest discover -s tests -q` → 167 OK (1 skip).
 
+- Segunda rodada do review do PR #30 (ai-codex, head 7dc31e7): teto da
+  coocorrência separado da contagem — admissão limitada a 100 mil pares em
+  ordem determinística, e pares admitidos recebem frequência/fontes exatas
+  pela interseção do índice termo → páginas (par novo no teto não reduz os
+  admitidos; regressão com teto reduzido via patch cobre pares novos antes
+  de existentes em página posterior); `is_new` das coocorrências agora
+  compara normalizado dos dois lados (keyword 'Alface + Beterraba!' marca
+  'alface + beterraba' como não-nova). Verificação: suíte → 169 OK (1 skip).
+
 Próximo passo operacional: publicar a configuração escolhida, ativar o
 monitoramento após integração aprovada e reproduzir o aceite
 de #17; para #18, fornecer credenciais locais e hospedar fixtures controladas.

@@ -176,8 +176,12 @@ sustenta — termo sem fonte no corpus não existe — e o registro referencia
   duas páginas do corpus, renderizados como `primeiro + segundo` em ordem
   alfabética. A frequência conta páginas, não ocorrências. Só combinam termos
   já presentes em ao menos duas páginas (candidatos possíveis) e o número de
-  pares distintos rastreados é limitado a 100.000 — pares além do teto não
-  são descobertos; o limite garante trabalho limitado em corpora degenerados.
+  pares distintos admitidos é limitado a 100.000, em ordem determinística
+  (páginas por URL, termos alfabéticos). A admissão é separada da contagem:
+  pares admitidos recebem frequência e fontes exatas (interseção do índice
+  termo → páginas), então um par novo que encontre o teto nunca reduz as
+  ocorrências dos pares já admitidos; apenas pares além do teto ficam de fora,
+  o que garante trabalho limitado em corpora degenerados.
 - `question`: perguntas presentes no texto preservado (segmentos com "?"),
   normalizadas sem o ponto de interrogação. O texto dos headings já faz parte
   do texto preservado, então headings de pergunta também aparecem aqui.

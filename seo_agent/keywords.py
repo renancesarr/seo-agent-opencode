@@ -89,31 +89,36 @@ def discover_keywords(project_id, runs, store, *, limit=DEFAULT_LIMIT):
     # Coocorrência em duas fases: um par só pode alcançar
     # MIN_COOCCURRENCE_PAGES páginas se cada termo já aparece em pelo menos
     # essas páginas — primeiro os candidatos, depois os pares por página,
-    # apenas entre candidatos e sob o teto MAX_COOCCURRENCE_PAIRS.
+    # apenas entre candidatos e sob o teto MAX_COOCCURRENCE_PAIRS. A admissão
+    # (limitada) é separada da contagem: pares admitidos recebem fontes e
+    # frequência exatas pela interseção do índice termo → páginas, então um
+    # par novo que bata no teto nunca rouba as ocorrências dos já admitidos.
     term_pages = {}
     for url, contents in page_contents.items():
         for term in contents:
             term_pages.setdefault(term, set()).add(url)
     candidates = {term for term, urls in term_pages.items()
                   if len(urls) >= MIN_COOCCURRENCE_PAGES}
-    pair_sources = {}
+    admitted = set()
     for url in sorted(page_contents):
         local = sorted(page_contents[url] & candidates)
         for pair in combinations(local, 2):
-            if pair not in pair_sources:
-                if len(pair_sources) >= MAX_COOCCURRENCE_PAIRS:
+            if pair not in admitted:
+                if len(admitted) >= MAX_COOCCURRENCE_PAIRS:
                     break
-                pair_sources[pair] = set()
-            pair_sources[pair].add(url)
+                admitted.add(pair)
+    pair_sources = {pair: term_pages[pair[0]] & term_pages[pair[1]] for pair in admitted}
     items = [{'kind': 'long_tail', 'term': term, 'frequency': frequency,
-              'sources': sorted(ngram_sources[term]), 'is_new': term not in covered}
+              'sources': sorted(ngram_sources[term]),
+              'is_new': _normalized_keyword(term) not in covered}
              for term, frequency in ngram_occurrences.items() if frequency >= MIN_NGRAM_OCCURRENCES]
     items += [{'kind': 'co_occurrence', 'term': f'{first} + {second}', 'frequency': len(urls),
-               'sources': sorted(urls), 'is_new': f'{first} + {second}' not in covered}
+               'sources': sorted(urls),
+               'is_new': _normalized_keyword(f'{first} + {second}') not in covered}
               for (first, second), urls in pair_sources.items()
               if len(urls) >= MIN_COOCCURRENCE_PAGES]
     items += [{'kind': 'question', 'term': term, 'frequency': len(urls),
-               'sources': sorted(urls), 'is_new': term not in covered}
+               'sources': sorted(urls), 'is_new': _normalized_keyword(term) not in covered}
               for term, urls in question_sources.items()]
     items.sort(key=lambda item: (-item['frequency'], item['term'], item['kind']))
     record = {'run_id': str(uuid4()), 'project_id': project_id,

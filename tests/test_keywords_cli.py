@@ -232,6 +232,52 @@ class KeywordsCLI(unittest.TestCase):
         self.assertEqual(record['result']['discovered'], [])
         self.assertLess(peak, 80 * 1024 * 1024)
 
+    def test_cap_keeps_exact_counts_for_admitted_pairs_when_new_pairs_hit_the_cap(self):
+        from unittest.mock import patch
+        from seo_agent.__main__ import prepare_run
+        shared = ' '.join(f't{number}' for number in range(5))
+        sources = [
+            {'id': 'fonte-a', 'url': 'https://example.org/a', 'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': {'title': 'A', 'text': shared, 'headings': [], 'links': [],
+                      'authors': [], 'dates': [], 'structured_data': []}},
+            {'id': 'fonte-b', 'url': 'https://example.org/b', 'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': {'title': 'B', 'text': 'aa ' + shared, 'headings': [], 'links': [],
+                      'authors': [], 'dates': [], 'structured_data': []}},
+            {'id': 'fonte-c', 'url': 'https://example.org/c', 'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': {'title': 'C', 'text': 'aa', 'headings': [], 'links': [],
+                      'authors': [], 'dates': [], 'structured_data': []}},
+        ]
+        prepare_run(self.project, self.store, status='collected', result={'sources': sources})
+        self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        with patch('seo_agent.keywords.MAX_COOCCURRENCE_PAIRS', 10):
+            record = self.invoke('keywords', '--project-id', 'horta', '--store', str(self.store),
+                                 '--limit', '100')
+        co = [item for item in record['result']['discovered'] if item['kind'] == 'co_occurrence']
+        self.assertEqual(len(co), 10)
+        for item in co:
+            self.assertEqual(item['frequency'], 2)
+            self.assertEqual(item['sources'], ['https://example.org/a', 'https://example.org/b'])
+        self.assertFalse(any('aa' in item['term'] for item in co))
+
+    def test_cooccurrence_against_registered_keyword_is_not_new(self):
+        from seo_agent.__main__ import prepare_run
+        self.project['keywords'] = ['Alface + Beterraba!']
+        self.project_file.write_text(json.dumps(self.project), encoding='utf-8')
+        text = 'Alface beterraba alface beterraba'
+        sources = [
+            {'id': 'fonte-1', 'url': 'https://example.org/1', 'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': {'title': 'Um', 'text': text, 'headings': [], 'links': [],
+                      'authors': [], 'dates': [], 'structured_data': []}},
+            {'id': 'fonte-2', 'url': 'https://example.org/2', 'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': {'title': 'Dois', 'text': text, 'headings': [], 'links': [],
+                      'authors': [], 'dates': [], 'structured_data': []}},
+        ]
+        prepare_run(self.project, self.store, status='collected', result={'sources': sources})
+        self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        record = self.invoke('keywords', '--project-id', 'horta', '--store', str(self.store))
+        by_term = {item['term']: item for item in record['result']['discovered']}
+        self.assertFalse(by_term['alface + beterraba']['is_new'])
+
 
 if __name__ == '__main__':
     unittest.main()
