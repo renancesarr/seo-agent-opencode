@@ -211,6 +211,27 @@ class KeywordsCLI(unittest.TestCase):
         self.assertEqual(record['result']['discovered'], [])
         self.assertEqual(len(record['result']['excluded']), 1)
 
+    def test_single_huge_page_does_not_materialize_impossible_pairs(self):
+        terms = ' '.join(f'termo{number:04d}' for number in range(1500))
+        page = {'title': 'Página enorme', 'text': terms, 'headings': [], 'links': [],
+                'authors': [], 'dates': [], 'structured_data': []}
+        from seo_agent.__main__ import prepare_run
+        prepare_run(self.project, self.store, status='collected', result={'sources': [
+            {'id': 'fonte-enorme', 'url': 'https://example.org/enorme',
+             'retrieved_at': '2026-03-01T00:00:00+00:00', 'page': page}]})
+        self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        import tracemalloc
+        tracemalloc.start()
+        try:
+            record = self.invoke('keywords', '--project-id', 'horta', '--store', str(self.store),
+                                 '--limit', '1')
+        finally:
+            peak = tracemalloc.get_traced_memory()[1]
+            tracemalloc.stop()
+        self.assertEqual(record['status'], 'discovered')
+        self.assertEqual(record['result']['discovered'], [])
+        self.assertLess(peak, 80 * 1024 * 1024)
+
 
 if __name__ == '__main__':
     unittest.main()

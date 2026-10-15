@@ -188,6 +188,16 @@ class ExtractCLI(unittest.TestCase):
         self.assertEqual(extraction['retrieved_at'], second['result']['sources'][0]['retrieved_at'])
         self.assertEqual(len(self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']), 4)
 
+    def test_reextraction_after_rank_keeps_preserved_pages_and_network_builds(self):
+        self.collect()
+        first = self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))
+        second = self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(second['status'], 'extracted')
+        self.assertEqual(second['result']['extractions'], first['result']['extractions'])
+        network = self.invoke('network', 'build', '--project-id', 'horta', '--store', str(self.store))
+        self.assertEqual(network['status'], 'built')
+
 
 if __name__ == '__main__':
     unittest.main()

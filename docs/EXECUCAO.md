@@ -429,6 +429,15 @@ Implementação local de #10–#16 em 13/10/2026, ainda sujeita a review cruzado
   gera; histórico consultável. Suíte:
   `python -m unittest discover -s tests -q` → 165 OK (1 skip), sem rede/LLM.
 
+- Correções do review do PR #30 (ai-codex, head 0c0ec47): (1) P1 — extract
+  lê apenas fontes de coleta preservadas (entradas com page/id); resultados
+  derivados como o ranking não substituem o conteúdo original — regressão do
+  ciclo run→extract→rank→extract→network build added; (2) P2 — coocorrência
+  em duas fases (candidatos = termos em >=2 páginas) com teto de 100.000
+  pares distintos; página única de 1.500 termos não materializa pares
+  (pico de memória < 80 MiB verificado por tracemalloc no teste).
+  Verificação: `python3 -m unittest discover -s tests -q` → 167 OK (1 skip).
+
 Próximo passo operacional: publicar a configuração escolhida, ativar o
 monitoramento após integração aprovada e reproduzir o aceite
 de #17; para #18, fornecer credenciais locais e hospedar fixtures controladas.

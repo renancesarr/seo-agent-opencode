@@ -65,7 +65,11 @@ def extract_project(project_id, runs, store):
     pages = {}
     for run in runs:
         for source in (run.get('result') or {}).get('sources', []):
-            if isinstance(source, dict) and isinstance(source.get('url'), str) and source['url']:
+            # Só fontes de coleta preservam página: derivados como o rank também
+            # gravam result.sources ({url, score, factors}) e não podem
+            # sobrescrever o conteúdo original do histórico.
+            if (isinstance(source, dict) and isinstance(source.get('url'), str) and source['url']
+                    and ('page' in source or 'id' in source)):
                 pages[source['url']] = source
     if not pages:
         return {'project_id': project_id, 'status': 'no_sources', 'message': NO_SOURCES_MESSAGE}

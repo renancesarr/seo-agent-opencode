@@ -101,7 +101,10 @@ pendentes. `prepare` não dispara essas etapas.
 ## Extração determinística das fontes coletadas
 
 `extract` implementa a extração do [ticket #24](https://github.com/renancesarr/seo-agent-opencode/issues/24)
-e consome somente o histórico local: sem LLM, rede ou serviço externo. Sem URLs
+e consome somente o histórico local: sem LLM, rede ou serviço externo. Lê apenas
+as fontes de coleta preservadas (entradas com página/identificador de fonte);
+resultados derivados que também gravam `sources` — como o ranking — nunca
+substituem o conteúdo original. Sem URLs
 coletadas no histórico do projeto, devolve `status: no_sources` com mensagem
 orientando executar a busca antes, sem registrar execução. Com fontes, extrai de
 cada URL o máximo possível do conteúdo já preservado pela coleta: texto,
@@ -171,7 +174,10 @@ sustenta — termo sem fonte no corpus não existe — e o registro referencia
   (como, quando, onde) ficam fora da lista porque encabeçam cauda longa valiosa.
 - `co_occurrence`: pares de termos de conteúdo que aparecem juntos em ao menos
   duas páginas do corpus, renderizados como `primeiro + segundo` em ordem
-  alfabética. A frequência conta páginas, não ocorrências.
+  alfabética. A frequência conta páginas, não ocorrências. Só combinam termos
+  já presentes em ao menos duas páginas (candidatos possíveis) e o número de
+  pares distintos rastreados é limitado a 100.000 — pares além do teto não
+  são descobertos; o limite garante trabalho limitado em corpora degenerados.
 - `question`: perguntas presentes no texto preservado (segmentos com "?"),
   normalizadas sem o ponto de interrogação. O texto dos headings já faz parte
   do texto preservado, então headings de pergunta também aparecem aqui.

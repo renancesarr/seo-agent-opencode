@@ -10,6 +10,11 @@ from uuid import uuid4
 DEFAULT_LIMIT = 50
 MIN_NGRAM_OCCURRENCES = 2
 MIN_COOCCURRENCE_PAGES = 2
+# Teto de trabalho da coocorrência: número máximo de pares distintos
+# acumulados. Pares só entre termos já presentes em >= MIN_COOCCURRENCE_PAGES
+# páginas (candidatos possíveis); o teto impede expansão quadrática sem
+# limite em corpora degenerados — pares além dele não são rastreados.
+MAX_COOCCURRENCE_PAIRS = 100_000
 
 TOKEN_PATTERN = re.compile(r'[^\W_]+')
 QUESTION_PATTERN = re.compile(r'[^.!?]*\?')
@@ -67,7 +72,7 @@ def discover_keywords(project_id, runs, store, *, limit=DEFAULT_LIMIT):
     covered = {_normalized_keyword(keyword) for keyword in project_keywords}
     ngram_occurrences = Counter()
     ngram_sources = {}
-    pair_sources = {}
+    page_contents = {}
     question_sources = {}
     for extraction in valid:
         url = extraction['url']
@@ -76,13 +81,30 @@ def discover_keywords(project_id, runs, store, *, limit=DEFAULT_LIMIT):
         for term in _ngrams(tokens):
             ngram_occurrences[term] += 1
             ngram_sources.setdefault(term, set()).add(url)
-        contents = {token for token in tokens if token not in STOPWORDS_PT_BR}
-        for pair in combinations(sorted(contents), 2):
-            pair_sources.setdefault(pair, set()).add(url)
+        page_contents[url] = {token for token in tokens if token not in STOPWORDS_PT_BR}
         # O texto preservado já contém o texto dos headings, então perguntas de
         # heading ("Como plantar?") aparecem aqui como qualquer segmento com "?".
         for term in _question_terms(text):
             question_sources.setdefault(term, set()).add(url)
+    # Coocorrência em duas fases: um par só pode alcançar
+    # MIN_COOCCURRENCE_PAGES páginas se cada termo já aparece em pelo menos
+    # essas páginas — primeiro os candidatos, depois os pares por página,
+    # apenas entre candidatos e sob o teto MAX_COOCCURRENCE_PAIRS.
+    term_pages = {}
+    for url, contents in page_contents.items():
+        for term in contents:
+            term_pages.setdefault(term, set()).add(url)
+    candidates = {term for term, urls in term_pages.items()
+                  if len(urls) >= MIN_COOCCURRENCE_PAGES}
+    pair_sources = {}
+    for url in sorted(page_contents):
+        local = sorted(page_contents[url] & candidates)
+        for pair in combinations(local, 2):
+            if pair not in pair_sources:
+                if len(pair_sources) >= MAX_COOCCURRENCE_PAIRS:
+                    break
+                pair_sources[pair] = set()
+            pair_sources[pair].add(url)
     items = [{'kind': 'long_tail', 'term': term, 'frequency': frequency,
               'sources': sorted(ngram_sources[term]), 'is_new': term not in covered}
              for term, frequency in ngram_occurrences.items() if frequency >= MIN_NGRAM_OCCURRENCES]
