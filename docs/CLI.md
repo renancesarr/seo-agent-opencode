@@ -16,9 +16,42 @@ python3 -m seo_agent prepare --project examples/projeto.json
 
 # Recuperar as execuções desse projeto, em ordem de registro
 python3 -m seo_agent history --project-id horta-local
+
+# Extrair de forma determinística as URLs já coletadas do projeto
+python3 -m seo_agent extract --project-id horta-local
+
+# Construir a rede de conhecimento a partir da extração mais recente
+python3 -m seo_agent network build --project-id horta-local
+
+# Consultar offline a rede registrada, com fonte por fato
+python3 -m seo_agent network query --project-id horta-local
+
+# Resumo compacto da rede, pensado para consumir menos tokens
+python3 -m seo_agent network query --project-id horta-local --compact
+
+# Descobrir palavras-chave no corpus extraído, com fonte por termo
+python3 -m seo_agent keywords --project-id horta-local
+
+# Limitar a lista de descobertos (padrão 50)
+python3 -m seo_agent keywords --project-id horta-local --limit 20
+
+# Classificar o tipo de conteúdo de cada fonte extraída, com justificativa
+python3 -m seo_agent classify --project-id horta-local
+
+# Pontuar a relevância das fontes e temas do corpus extraído, com justificativa
+python3 -m seo_agent rank --project-id horta-local
+
+# Gerar insights por LLM sobre a rede compacta e as análises do corpus
+python3 -m seo_agent insights --project-id horta-local
+
+# Gerar insights com um modelo via OpenCode (provedor/modelo)
+python3 -m seo_agent insights --project-id horta-local --model ollama/qwen3
+
+# Entregar insights controlados de um arquivo JSON, sem executar modelo
+python3 -m seo_agent insights --project-id horta-local --insights-file data/insights.json
 ```
 
-`prepare` e `history` aceitam `--store <arquivo.sqlite3>` para escolher o
+`prepare`, `history`, `extract`, `network`, `keywords`, `classify`, `rank` e `insights` aceitam `--store <arquivo.sqlite3>` para escolher o
 armazenamento. O padrão é `data/seo-agent.sqlite3`, relativo ao diretório atual,
 ignorado pelo Git. Use o mesmo arquivo para consultar as execuções registradas.
 Uma consulta sem histórico devolve lista vazia e não cria o banco.
@@ -64,6 +97,281 @@ O estado preparado significa que a entrada foi validada e registrada. Busca,
 leitura e inspeção podem ser executadas separadamente com os comandos abaixo.
 O fluxo por projeto, a análise por modelo, o outline e a revisão permanecem
 pendentes. `prepare` não dispara essas etapas.
+
+## Extração determinística das fontes coletadas
+
+`extract` implementa a extração do [ticket #24](https://github.com/renancesarr/seo-agent-opencode/issues/24)
+e consome somente o histórico local: sem LLM, rede ou serviço externo. Lê apenas
+as fontes de coleta preservadas (entradas com página/identificador de fonte);
+resultados derivados que também gravam `sources` — como o ranking — nunca
+substituem o conteúdo original. Sem URLs
+coletadas no histórico do projeto, devolve `status: no_sources` com mensagem
+orientando executar a busca antes, sem registrar execução. Com fontes, extrai de
+cada URL o máximo possível do conteúdo já preservado pela coleta: texto,
+título/descrição, idioma, headings, links, imagens/alt, JSON-LD, metadados
+(robots, social, hreflang, canonical) e, com a origem registrada por sinal,
+datas (meta `article:published_time`/`article:modified_time`, atributo
+`datetime` de `time` e `datePublished`/`dateModified`/`dateCreated` do JSON-LD,
+inclusive em `@graph`) e autores (meta `author` e `author` do JSON-LD).
+
+O resultado por URL — `source_id`, `retrieved_at`, `page` e `failures` — é
+preservado como nova execução no histórico, sem destruir as anteriores. Para
+URLs recoletadas vale a página preservada mais recente; a saída lista as
+extrações em ordem alfabética de URL. Falha de uma URL (página preservada
+ilegível) fica registrada em `failures` com o estágio, sem derrubar as demais;
+ausência de sinal (por exemplo, página sem autor) não é erro. Reexecutar sobre
+as mesmas fontes produz a mesma extração: apenas `run_id` e `created_at` mudam.
+
+## Rede de conhecimento das extrações
+
+`network` implementa a rede do [ticket #25](https://github.com/renancesarr/seo-agent-opencode/issues/25)
+e consome somente o histórico local: sem LLM, rede ou serviço externo.
+`network build` deriva a rede da extração registrada mais recente e a preserva
+como nova execução no histórico, sem destruir as anteriores; `network query`
+devolve essa rede exatamente como preservada, e `--compact` resume em contagens
+e principais termos/relações — sempre com a URL-fonte de cada fato.
+
+A modelagem é mínima e auditável: entidades `page` (a URL preservada, com
+`source_id` e `retrieved_at`) e `term` (texto normalizado dos headings, em
+minúsculas — os headings são os temas das páginas, por isso `term` cobre o
+papel de tema sem um terceiro tipo de entidade); relações `has_term`
+(página→termo) e `links_to` (página→página, apenas quando o destino também foi
+extraído; o fragmento do link é ignorado — `pagina#secao` aponta à página). Toda entidade e relação carrega `sources` com as URLs do corpus que
+a sustentam: nenhuma consulta devolve fato sem fonte. O registro da rede
+referencia `extraction_run_id`, a execução de extração da qual foi derivada —
+a proveniência vale por fato (URL) e por execução. Entidades e relações saem
+em ordem determinística (por tipo, origem e destino), e reexecuções sobre a
+mesma extração produzem a mesma rede.
+
+Sem extração registrada no histórico, `network build` termina em erro (saída 2)
+sem registrar execução: se o projeto já tem URLs coletadas, o erro orienta
+executar `extract`; se ainda não tem nenhuma URL, orienta executar a busca
+(`run`) primeiro. URL com falha na
+extração fica fora da rede, com a falha preservada em `excluded`, sem derrubar
+as demais; extração sem fontes válidas devolve `status: "empty"` com rede vazia,
+o que não é erro. O resumo compacto traz as contagens completas da rede, mas
+apenas os 20 termos líderes (mais páginas, ordem alfabética como desempate) e
+os 20 primeiros links — as listas são limitadas para o resumo continuar compacto
+em corpora grandes; cresce com a estrutura da rede, não com o
+texto das páginas, e é menor que a soma do texto bruto do corpus — é a forma
+pensada para alimentar uma LLM pagando menos tokens.
+
+## Descoberta de palavras-chave do corpus
+
+`keywords` implementa a descoberta do [ticket #26](https://github.com/renancesarr/seo-agent-opencode/issues/26)
+e consome somente o histórico local: sem LLM, rede ou serviço externo. Sobre o
+texto extraído preservado pela extração mais recente, descobre de forma
+determinística três tipos de termos, cada um com a lista de URLs-fonte que o
+sustenta — termo sem fonte no corpus não existe — e o registro referencia
+`extraction_run_id`, a execução de extração da qual a descoberta foi derivada:
+
+- `long_tail`: bigramas e trigramas de cauda longa com ao menos duas ocorrências
+  no corpus. A normalização é simples (minúsculas, sem pontuação, acentos
+  preservados) e o n-grama precisa começar e terminar em termo de conteúdo;
+  preposições internas são mantidas para a frase continuar natural
+  ("horta em casa"). Uma lista mínima de stopwords em pt-BR — apenas artigos,
+  preposições, conjunções e cópulas — delimita essas bordas; interrogativos
+  (como, quando, onde) ficam fora da lista porque encabeçam cauda longa valiosa.
+- `co_occurrence`: pares de termos de conteúdo que aparecem juntos em ao menos
+  duas páginas do corpus, renderizados como `primeiro + segundo` em ordem
+  alfabética. A frequência conta páginas, não ocorrências. Só combinam termos
+  já presentes em ao menos duas páginas (candidatos possíveis) e o número de
+  pares distintos admitidos é limitado a 100.000, em ordem determinística
+  (páginas por URL, termos alfabéticos). A admissão é separada da contagem:
+  pares admitidos recebem frequência e fontes exatas (interseção do índice
+  termo → páginas), então um par novo que encontre o teto nunca reduz as
+  ocorrências dos pares já admitidos; apenas pares além do teto ficam de fora,
+  o que garante trabalho limitado em corpora degenerados.
+- `question`: perguntas presentes no texto preservado (segmentos com "?",
+  identificados em varredura linear, cortados no último "."/"!"), normalizadas
+  sem o ponto de interrogação. Perguntas de heading são extraídas do próprio
+  heading: o texto preservado concatena navegação e headings sem pontuação, e
+  a variante "com prefixo" que apareceria no texto corrido é descartada.
+
+Cada item sai com `kind`, `term`, `frequency`, `sources` (URLs) e `is_new`. O
+cruzamento com as palavras-chave originais do projeto — derivadas do snapshot
+mais recente registrado no histórico — marca `is_new: false` apenas quando o
+termo normalizado é igual a uma keyword normalizada (maiúsculas/pontuação
+ignoradas). Refinamentos que apenas contêm uma keyword planejada continuam
+novos: a cauda longa além do que o operador planejou é justamente o alvo.
+
+A descoberta é preservada como nova execução no histórico, sem destruir as
+anteriores. A lista sai ordenada por frequência decrescente, depois alfabética
+(tipo como desempate final), limitada por `--limit` (padrão 50) para não virar
+dump do corpus; `--limit 0` devolve lista vazia e valores negativos são
+rejeitados. Reexecutar sobre a mesma extração produz a mesma descoberta —
+apenas `run_id` e `created_at` mudam.
+
+Sem extração registrada, `keywords` termina em erro (saída 2) sem registrar
+execução: se o projeto já tem URLs coletadas, o erro orienta executar `extract`;
+se ainda não tem nenhuma URL, orienta executar a busca (`run`) primeiro. URL
+com falha na extração fica fora da descoberta, com a falha preservada em
+`excluded`, sem derrubar as demais; extração sem fontes válidas devolve
+`status: "empty"` com lista vazia, o que não é erro.
+
+## Classificação de tipos de conteúdo
+
+`classify` implementa a classificação do [ticket #27](https://github.com/renancesarr/seo-agent-opencode/issues/27)
+e consome somente o histórico local: sem LLM, rede ou serviço externo. Sobre a
+extração registrada mais recente, rotula cada URL em um tipo de conteúdo —
+`article` (artigo/guia), `listing` (listagem/diretório) ou `profile`
+(ficha/institucional) — e preserva a classificação como nova execução no
+histórico, referenciando `extraction_run_id`.
+
+O método é ML clássico local: classificador linear de pontuação sobre
+indicadores binários dos sinais já extraídos, com pesos fixos auditáveis no
+módulo (`WEIGHTS`). Sem aleatoriedade alguma — determinístico por construção,
+sem semente. Sem corpus rotulado para treinar modelos nesta etapa, a regra
+linear com indicadores de interpretação causal direta é suficiente e
+corrigível: cada saída publica a evidência que a sustenta.
+
+| Indicador | Regra de ativação | article | listing | profile |
+|---|---|---|---|---|
+| `long_prose` | texto com >= 300 palavras | 3 | — | — |
+| `structured_headings` | >= 3 headings | 2 | — | — |
+| `has_author` | autor extraído (meta/JSON-LD) | 1 | — | — |
+| `has_date` | data extraída (meta/time/JSON-LD) | 1 | — | — |
+| `type_article` | JSON-LD `Article`/`BlogPosting`/`NewsArticle` | 3 | — | — |
+| `many_links` | >= 12 links | — | 3 | — |
+| `anchor_heavy` | >= 50% das palavras do texto em âncoras | — | 2 | — |
+| `type_listing` | JSON-LD `ItemList`/`CollectionPage` | — | 3 | — |
+| `sparse` | <= 300 palavras, <= 5 links e <= 2 headings | — | — | 3 |
+| `type_profile` | JSON-LD `ProfilePage`/`Person`/`Organization`/`LocalBusiness`/`AboutPage` | — | — | 3 |
+
+O rótulo é o tipo de maior pontuação; empate decide em ordem alfabética do
+tipo. A justificativa é inspecionável por URL: cada classificação sai com
+`signals` — valores observados (`text_words`, `headings`, `links`,
+`linked_words_ratio`, `structured_types`, `has_author`, `has_date`) — e
+`scores`, a pontuação dos três tipos. O operador vê por que a página recebeu o
+rótulo e pode auditar ou ajustar os pesos.
+
+Página sem texto utilizável, ou sem nenhum indicador ativo (pontuação máxima
+zero), sai como pendência `unclassified` com o motivo — não é erro; o registro
+inteiro fica `status: "partial"` para revisão. Sem extração registrada,
+`classify` termina em erro (saída 2) sem registrar execução: se o projeto já
+tem URLs coletadas, o erro orienta executar `extract`; se ainda não tem nenhuma
+URL, orienta executar a busca (`run`) primeiro. URL com falha na extração fica
+fora da classificação, com a falha preservada em `excluded`, sem derrubar as
+demais; extração sem fontes válidas devolve `status: "empty"`, o que não é
+erro. As classificações saem em ordem alfabética de URL e reexecuções sobre a
+mesma extração produzem o mesmo resultado — apenas `run_id` e `created_at`
+mudam.
+
+## Score de relevância de fontes e temas
+
+`rank` implementa o score de relevância do [ticket #28](https://github.com/renancesarr/seo-agent-opencode/issues/28)
+e consome somente o histórico local: sem LLM, rede ou serviço externo. Sobre a
+extração registrada mais recente, pontua a relevância de cada fonte e de cada
+tema do corpus e preserva o ranking como nova execução no histórico,
+referenciando `extraction_run_id`.
+
+O método é ML clássico local, da mesma família do `classify`: ranking linear
+determinístico sobre sinais auditáveis já extraídos/computados, com pesos
+fixos no módulo (`WEIGHTS`). Sem aleatoriedade alguma — determinístico por
+construção, sem semente. O score da fonte é a soma das contribuições dos
+fatores:
+
+| Fator | Regra de ativação | Peso |
+|---|---|---|
+| `has_author` | autor extraído (meta/JSON-LD) | 1 |
+| `has_date` | data extraída (meta/time/JSON-LD) | 1 |
+| `substantial_text` | texto com >= 300 palavras | 3 |
+| `structured_headings` | >= 3 headings | 2 |
+| `structured_data` | JSON-LD presente | 2 |
+| `inbound_links` | por link recebido de página distinta do corpus, até 3 | 1 |
+
+O sinal de rede (`inbound_links`) é derivado da própria extração sendo pontuada
+— com a mesma semântica deduplicada das relações `links_to` da rede (inclusive
+o desconto de fragmentos: `pagina#secao` vota na página): cada
+página de origem conta um voto por destino, independentemente de quantas
+âncoras — em vez de consumir a rede persistida. Assim o `rank` funciona logo
+após `extract`, sempre coerente com a execução pontuada, sem exigir
+`network build` e sem risco de pontuar contra uma rede desatualizada.
+
+A explicação é inspecionável por URL: cada fonte sai com `factors`, a lista de
+`{signal, value, weight, points}` — sinal, valor observado, peso aplicado e
+pontos contribuídos — cuja soma é o `score`. O operador vê por que uma página
+ficou à frente da outra e pode auditar ou ajustar os pesos.
+
+O score por tema agrega as fontes que o cobrem: o tema é o texto normalizado
+dos headings (o mesmo critério de `term` da rede) e o score do tema é a soma
+dos scores das fontes cujos headings o mencionam, com a lista `sources` das
+URLs-fonte. As ordenações são determinísticas: fontes por score decrescente e
+depois URL; temas por score decrescente e depois termo; fontes de um tema na
+mesma ordem do ranking.
+
+Página sem texto utilizável sai como pendência com o motivo — não é erro; o
+registro inteiro fica `status: "partial"` para revisão. Página com texto mas
+nenhum fator ativo recebe score 0 normalmente e fecha o ranking. Sem extração
+registrada, `rank` termina em erro (saída 2) sem registrar execução: se o
+projeto já tem URLs coletadas, o erro orienta executar `extract`; se ainda não
+tem nenhuma URL, orienta executar a busca (`run`) primeiro. URL com falha na
+extração fica fora do ranking, com a falha preservada em `excluded`, sem
+derrubar as demais; extração sem fontes válidas devolve `status: "empty"`, o
+que não é erro. Reexecuções sobre a mesma extração produzem os mesmos scores —
+apenas `run_id` e `created_at` mudam.
+
+## Insights por LLM sobre a rede compacta
+
+`insights` implementa os insights do [ticket #29](https://github.com/renancesarr/seo-agent-opencode/issues/29)
+e é a única etapa da pipeline de conteúdo que usa LLM — sobre o
+conhecimento compacto, nunca páginas cruas. Reutiliza o contrato de geração
+do `run` (gerador injetável na seam da CLI; modelo opcional via OpenCode com
+`--model provedor/modelo`, ou `--insights-file arquivo.json` para insights
+controlados sem executar modelo).
+
+**Condições de entrada.** A entrada mínima é a rede construída. Sem URLs
+coletadas, o erro orienta executar a busca (`run`); com URLs mas sem
+extração, orienta `extract` (guarda comum da pipeline); com extração mas sem
+rede, orienta `network build`; rede sem páginas válidas orienta reconstruir
+o corpus. Nesses casos nada é registrado. `keywords`, `classify` e `rank`
+são recomendadas, não exigidas: quando ausentes para a extração da rede
+atual, a geração prossegue e a ausência fica registrada como pendência
+informada em `knowledge.missing_analyses`.
+
+**Contrato do payload compacto.** A entrada da LLM é o objeto `knowledge`
+persistido no resultado da execução, e só ele além do snapshot do projeto:
+
+- `network`: o resumo compacto da rede (`network query --compact`) — contagens
+  completas, até 20 termos líderes e até 20 links, cada um com URLs-fonte;
+- `keywords`: quando existente, as palavras-chave do projeto e a descoberta
+  (`kind`, `term`, `frequency`, `sources`, `is_new`);
+- `classifications`: quando existente, `{url, type}` por fonte (sem os sinais
+  internos — o rótulo basta para insights);
+- `rankings`: quando existente, fontes pontuadas `{url, score}` e temas
+  `{term, score, sources}`;
+- `missing_analyses`: análises ausentes, para o modelo expor insuficiência.
+
+O texto bruto das páginas (`page.text`) jamais entra no payload: o
+invariante é testado na suíte. Análises só entram quando derivam da mesma
+execução de extração da rede (`extraction_run_id` igual) — nada de outra
+época do corpus se mistura ao conhecimento enviado.
+
+**Contrato anti-invenção dos insights.** O gerador devolve um objeto
+`{"existing": [...], "gaps": [...], "priorities": [...], "pending": [...]}` —
+o que existe, o que falta e o que priorizar. Cada item de `existing`/`gaps`/
+`priorities` exige `description` e `justification` não vazios, `kind`
+`observation` (provada pelo corpus) ou `hypothesis` (sugestão), `references`
+com URLs de páginas da rede e `terms` com termos da rede ou da descoberta de
+keywords. Referência ou termo fora do corpus é rejeitado; `observation` sem
+nenhuma âncora é rejeitada (`hypothesis` pode não ter âncoras). A rejeição não
+é erro da CLI: a execução sai com `status: "invalid_insights"`, o erro fica
+registrado em `result.errors` (estágio `generation`) e a execução permanece
+consultável no histórico. O contrato é a adaptação mínima do
+`validate_proposal` dos outlines para âncoras URL + termo.
+
+**Sem modelo configurado** (`insights` sem `--model`/`--insights-file` e sem
+gerador injetado), o comando entrega a rede compacta e as análises
+disponíveis em `result.knowledge`, registra `result.message` explicando que
+insights não foram gerados e sai com `status: "no_model"` — não é erro.
+
+**Persistência.** A execução é preservada no histórico com os run_ids de
+origem — `extraction_run_id`, `network_run_id` e, quando presentes,
+`keywords_run_id`, `classify_run_id`, `rank_run_id` (`null` quando a análise
+não alimentou esta execução) — além de `knowledge` (o que foi entregue ao
+gerador), `insights` (quando validados) e `errors`. Status possíveis:
+`generated`, `invalid_insights` e `no_model`. Com `--model`, `result.generator`
+registra backend/modelo e o status do gerador, como no `run`.
 
 ## Busca e inspeção
 
@@ -137,7 +445,8 @@ mais um sitemap do host final. Não segue links encontrados. O relatório inclui
 - `domain`: hostname, endereços resolvidos A/AAAA e expiração do certificado TLS
   verificado quando HTTPS; não é inventário DNS, WHOIS ou data de expiração do domínio.
 - `page`: texto, título, descrição, idioma, headings, canonical, robots,
-  hreflang, social tags, links internos/externos, imagens/alt e JSON-LD.
+  hreflang, social tags, links internos/externos, imagens/alt, datas, autores
+  e JSON-LD.
 - `robots`: regras recebidas, sitemaps declarados e permissão observada para
   SEOAgent. É uma observação posterior à auditoria explícita, não aplicação de
   política de um crawler automático. A avaliação usa urllib.robotparser e não é uma implementação completa do

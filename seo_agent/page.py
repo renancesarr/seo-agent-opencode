@@ -8,6 +8,7 @@ from urllib.parse import urljoin, urlsplit
 VOID_TAGS = set('area base br col embed hr img input link meta param source track wbr'.split())
 BLOCK_TAGS = set('address article aside blockquote br div dl dt dd footer form h1 h2 h3 h4 h5 h6 header hr li main nav ol p pre section table td th tr ul'.split())
 HEADINGS = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
+DATE_META = {'article:published_time', 'article:modified_time'}
 
 
 def _normalize(text):
@@ -31,12 +32,48 @@ def _reject_json_constant(value):
     raise ValueError(f'Constante JSON inválida: {value}.')
 
 
+JSON_LD_DATES = ('datePublished', 'dateModified', 'dateCreated')
+
+
+def _json_ld_objects(structured_data):
+    for block in structured_data:
+        graph = block.get('@graph')
+        if isinstance(graph, list):
+            for item in graph:
+                if isinstance(item, dict):
+                    yield item
+        yield block
+
+
+def _signal_values(value):
+    items = value if isinstance(value, list) else [value]
+    for item in items:
+        if isinstance(item, str) and item.strip():
+            yield item.strip()
+        elif isinstance(item, dict):
+            name = item.get('name')
+            if isinstance(name, str) and name.strip():
+                yield name.strip()
+
+
+def _unique_signals(signals):
+    seen = set()
+    unique = []
+    for item in signals:
+        key = (item['source'], item['value'])
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    return unique
+
+
 class _PageParser(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.page = {
             'title': None, 'description': None, 'language': None, 'canonical': None,
             'headings': [], 'robots': [], 'social': {}, 'hreflang': [], 'links': [],
+            'dates': [], 'authors': [],
             'structured_data': [], 'structured_data_errors': [],
             'images': [], 'issues': [],
         }
@@ -66,6 +103,10 @@ class _PageParser(HTMLParser):
                 self.page['robots'].append(content)
             elif name.startswith(('og:', 'twitter:')):
                 self.page['social'][name] = content
+            if name == 'author' and content:
+                self.page['authors'].append({'source': 'meta:author', 'value': content})
+            if name in DATE_META and content:
+                self.page['dates'].append({'source': f'meta:{name}', 'value': content})
             if name in {'robots', 'googlebot'} and {'noindex', 'none'} & set(content.lower().replace(',', ' ').split()):
                 self.page['issues'].append({
                     'code': 'meta_noindex', 'severity': 'info',
@@ -82,6 +123,10 @@ class _PageParser(HTMLParser):
             self.page['images'].append({
                 'src': attrs.get('src'), 'alt': (attrs['alt'] or '') if 'alt' in attrs else None,
             })
+        if tag == 'time' and not hidden:
+            datetime_value = _normalize(attrs.get('datetime') or '')
+            if datetime_value:
+                self.page['dates'].append({'source': 'time', 'value': datetime_value})
         if tag in BLOCK_TAGS and not hidden:
             self._separate_text()
         capture = tag == 'title' or (tag in HEADINGS | {'a'} and not hidden)
@@ -155,6 +200,14 @@ def extract_page(html: str, url: str) -> dict:
         parser._finish(parser.stack.pop())
     page = parser.page
     base = _http_url(parser.base_href, url) or url
+    for block in _json_ld_objects(page['structured_data']):
+        for key in JSON_LD_DATES:
+            for value in _signal_values(block.get(key)):
+                page['dates'].append({'source': f'json_ld:{key}', 'value': value})
+        for name in _signal_values(block.get('author')):
+            page['authors'].append({'source': 'json_ld:author', 'value': name})
+    page['dates'] = _unique_signals(page['dates'])
+    page['authors'] = _unique_signals(page['authors'])
     page['canonical'] = _http_url(page['canonical'], base)
     page['hreflang'] = [item | {'url': resolved} for item in page['hreflang']
                         if (resolved := _http_url(item['url'], base))]

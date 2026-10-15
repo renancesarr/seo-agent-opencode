@@ -52,21 +52,17 @@ def prepare_run(project, store, *, status='prepared', result=None):
     }
     if result and result.get('outline'):
         result['outline'].setdefault('created_run_id', record['run_id'])
-    store.parent.mkdir(parents=True, exist_ok=True)
-    with closing(sqlite3.connect(store)) as database, database:
-        database.execute(
-            'CREATE TABLE IF NOT EXISTS runs '
-            '(id TEXT PRIMARY KEY, project_id TEXT NOT NULL, record TEXT NOT NULL)'
-        )
-        if result is not None:
-            from seo_agent.monitoring import add_notices
+    if result is not None:
+        from seo_agent.monitoring import add_notices
+
+        def before_insert(database):
             previous = [json.loads(row[0]) for row in database.execute(
                 'SELECT record FROM runs WHERE project_id=? ORDER BY rowid', (project['id'],))]
             add_notices(record, previous)
-        database.execute(
-            'INSERT INTO runs (id, project_id, record) VALUES (?, ?, ?)',
-            (record['run_id'], project['id'], json.dumps(record, ensure_ascii=False)),
-        )
+    else:
+        before_insert = None
+    from seo_agent.store import save_run
+    save_run(record, store, before_insert=before_insert)
     return record
 
 
@@ -144,6 +140,41 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
     notices = commands.add_parser('notices', help='Consultar avisos locais sem repetir fatos inalterados.')
     notices.add_argument('--project-id', required=True)
     notices.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    extraction = commands.add_parser('extract', help='Extrair de forma determinística as URLs já coletadas.')
+    extraction.add_argument('--project-id', required=True)
+    extraction.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    network = commands.add_parser('network', help='Rede de conhecimento das extrações, offline e com fonte por fato.')
+    network_commands = network.add_subparsers(dest='network_command', required=True)
+    network_build = network_commands.add_parser('build', help='Derivar a rede da extração mais recente e registrar execução.')
+    network_build.add_argument('--project-id', required=True)
+    network_build.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    network_query = network_commands.add_parser('query', help='Consultar offline a rede registrada.')
+    network_query.add_argument('--project-id', required=True)
+    network_query.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    network_query.add_argument('--compact', action='store_true',
+                               help='Resumo compacto (contagens e principais termos/relações) para poupar tokens.')
+    keywords = commands.add_parser('keywords',
+                                   help='Descobrir palavras-chave no corpus extraído, com fonte por termo.')
+    keywords.add_argument('--project-id', required=True)
+    keywords.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    keywords.add_argument('--limit', type=int, default=50,
+                          help='Máximo de termos descobertos na saída (padrão 50).')
+    classification = commands.add_parser('classify',
+                                         help='Classificar o tipo de conteúdo de cada fonte extraída.')
+    classification.add_argument('--project-id', required=True)
+    classification.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    ranking = commands.add_parser('rank',
+                                  help='Pontuar a relevância das fontes e temas do corpus extraído.')
+    ranking.add_argument('--project-id', required=True)
+    ranking.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    insights = commands.add_parser('insights',
+                                   help='Gerar insights por LLM sobre a rede compacta e análises do corpus.')
+    insights.add_argument('--project-id', required=True)
+    insights.add_argument('--store', type=Path, default=Path('data/seo-agent.sqlite3'))
+    insights_generation = insights.add_mutually_exclusive_group()
+    insights_generation.add_argument('--insights-file', type=Path,
+                                     help='Insights JSON controlados; não executa modelo.')
+    insights_generation.add_argument('--model', help='Gerar pelo OpenCode usando provedor/modelo.')
     browser_experiment = commands.add_parser('browser-experiment', help='Comparar Quick Actions remotas em fixtures explícitas.')
     browser_experiment.add_argument('--fixtures', type=Path, required=True)
     browser_experiment.add_argument('--output', type=Path, required=True)
@@ -224,6 +255,38 @@ def main(argv=None, *, providers=None, fetch=None, wait=None, generate=None, mod
             result = {'project_id': args.project_id, 'notices': [notice
                       for run in history(args.project_id, args.store)['runs']
                       for notice in (run.get('result') or {}).get('notices', [])]}
+        elif args.command == 'extract':
+            from seo_agent.extract import extract_project
+            result = extract_project(args.project_id, history(args.project_id, args.store)['runs'], args.store)
+        elif args.command == 'network':
+            from seo_agent.network import build_network, query_network
+            runs = history(args.project_id, args.store)['runs']
+            if args.network_command == 'build':
+                result = build_network(args.project_id, runs, args.store)
+            else:
+                result = query_network(args.project_id, runs, compact=args.compact)
+        elif args.command == 'keywords':
+            from seo_agent.keywords import discover_keywords
+            result = discover_keywords(args.project_id, history(args.project_id, args.store)['runs'],
+                                       args.store, limit=args.limit)
+        elif args.command == 'classify':
+            from seo_agent.classify import classify_project
+            result = classify_project(args.project_id, history(args.project_id, args.store)['runs'],
+                                      args.store)
+        elif args.command == 'rank':
+            from seo_agent.rank import rank_project
+            result = rank_project(args.project_id, history(args.project_id, args.store)['runs'],
+                                  args.store)
+        elif args.command == 'insights':
+            from seo_agent.insights import InsightsGenerator, generate_insights
+            insight_generator = generate
+            if args.insights_file:
+                def insight_generator(project, result):
+                    return json.loads(args.insights_file.read_text(encoding='utf-8'))
+            elif args.model:
+                insight_generator = InsightsGenerator(args.model, runner=model_runner)
+            result = generate_insights(args.project_id, history(args.project_id, args.store)['runs'],
+                                       args.store, insight_generator)
         elif args.command == 'search':
             from seo_agent.web import search_web
             result = search_web(args.query, endpoint=args.endpoint, language=args.language, limit=args.limit)

@@ -1,0 +1,155 @@
+"""Descoberta determinística de palavras-chave no corpus extraído."""
+
+from collections import Counter
+from datetime import datetime, UTC
+from itertools import combinations
+import re
+from uuid import uuid4
+
+
+DEFAULT_LIMIT = 50
+MIN_NGRAM_OCCURRENCES = 2
+MIN_COOCCURRENCE_PAGES = 2
+# Teto de trabalho da coocorrência: número máximo de pares distintos
+# acumulados. Pares só entre termos já presentes em >= MIN_COOCCURRENCE_PAGES
+# páginas (candidatos possíveis); o teto impede expansão quadrática sem
+# limite em corpora degenerados — pares além dele não são rastreados.
+MAX_COOCCURRENCE_PAIRS = 100_000
+
+TOKEN_PATTERN = re.compile(r'[^\W_]+')
+
+# Lista mínima em pt-BR, só palavras puramente gramaticais (artigos, preposições,
+# conjunções e cópulas): delimitam as bordas de conteúdo dos n-gramas e evitam que
+# o topo da cauda longa seja lixo prepositivo ("de horta", "em casa"). Interrogativos
+# (como, quando, onde) ficam fora de propósito: encabeçam cauda longa valiosa.
+STOPWORDS_PT_BR = frozenset(
+    'a o as os um uma uns umas ao aos à às de do da dos das em no na nos nas num numa '
+    'por pelo pela pelos pelas para pra com sem sob sobre entre e ou nem que se não já '
+    'ser é são foi era tem ter há'.split())
+
+
+def _tokens(text):
+    return [token for token in TOKEN_PATTERN.findall(text.lower()) if len(token) >= 2]
+
+
+def _normalized_keyword(text):
+    return ' '.join(_tokens(text))
+
+
+def _question_segments(text):
+    """Segmentos terminados em "?", cortados no último "." ou "!" anterior.
+
+    Equivalente linear ao padrão `[^.!?]*\\?`: split em vez de regex evita o
+    retrocesso quadrático em textos longos sem pontuação.
+    """
+    segments = []
+    for part in (text or '').split('?')[:-1]:
+        cut = max(part.rfind('.'), part.rfind('!'))
+        segments.append(part[cut + 1:])
+    return segments
+
+
+def _question_terms(text):
+    return {_normalized_keyword(segment) for segment in _question_segments(text)} - {''}
+
+
+def _ngrams(tokens):
+    for size in (2, 3):
+        for start in range(len(tokens) - size + 1):
+            window = tokens[start:start + size]
+            if window[0] not in STOPWORDS_PT_BR and window[-1] not in STOPWORDS_PT_BR:
+                yield ' '.join(window)
+
+
+def _latest_project_keywords(runs):
+    for run in reversed(runs):
+        keywords = (run.get('project') or {}).get('keywords')
+        if keywords:
+            return list(keywords)
+    return []
+
+
+def discover_keywords(project_id, runs, store, *, limit=DEFAULT_LIMIT):
+    """Descobre palavras-chave no texto extraído mais recente, sem LLM e sem rede.
+
+    Cada termo descoberto sai com as URLs-fonte e a execução de extração de
+    origem; termo sem fonte no corpus não existe. URL com falha na extração
+    fica fora da descoberta, com a falha registrada, sem derrubar as demais.
+    """
+    if limit < 0:
+        raise ValueError('O limite de termos não pode ser negativo.')
+    from seo_agent.extract import extraction_inputs
+    extraction_run, valid, excluded = extraction_inputs(runs, purpose='descobrir palavras-chave')
+    project_keywords = _latest_project_keywords(runs)
+    covered = {_normalized_keyword(keyword) for keyword in project_keywords}
+    ngram_occurrences = Counter()
+    ngram_sources = {}
+    page_contents = {}
+    question_sources = {}
+    for extraction in valid:
+        url = extraction['url']
+        text = (extraction.get('page') or {}).get('text') or ''
+        tokens = _tokens(text)
+        for term in _ngrams(tokens):
+            ngram_occurrences[term] += 1
+            ngram_sources.setdefault(term, set()).add(url)
+        page_contents[url] = {token for token in tokens if token not in STOPWORDS_PT_BR}
+        # Perguntas vêm do texto e de cada heading isolado: o texto preservado
+        # concatena navegação e headings sem pontuação, então uma pergunta de
+        # heading ("Como plantar?") absorveria o texto anterior ("Guia Início
+        # Como plantar?"). O termo do heading vence: variantes do texto corrido
+        # que terminam nele são ruído e ficam de fora.
+        heading_questions = set()
+        for heading in (extraction.get('page') or {}).get('headings') or []:
+            heading_questions |= _question_terms(heading.get('text') or '')
+        questions = heading_questions | {
+            term for term in _question_terms(text)
+            if not any(term != question and term.endswith(' ' + question)
+                       for question in heading_questions)
+        }
+        for term in questions:
+            question_sources.setdefault(term, set()).add(url)
+    # Coocorrência em duas fases: um par só pode alcançar
+    # MIN_COOCCURRENCE_PAGES páginas se cada termo já aparece em pelo menos
+    # essas páginas — primeiro os candidatos, depois os pares por página,
+    # apenas entre candidatos e sob o teto MAX_COOCCURRENCE_PAIRS. A admissão
+    # (limitada) é separada da contagem: pares admitidos recebem fontes e
+    # frequência exatas pela interseção do índice termo → páginas, então um
+    # par novo que bata no teto nunca rouba as ocorrências dos já admitidos.
+    term_pages = {}
+    for url, contents in page_contents.items():
+        for term in contents:
+            term_pages.setdefault(term, set()).add(url)
+    candidates = {term for term, urls in term_pages.items()
+                  if len(urls) >= MIN_COOCCURRENCE_PAGES}
+    admitted = set()
+    for url in sorted(page_contents):
+        local = sorted(page_contents[url] & candidates)
+        for pair in combinations(local, 2):
+            if pair not in admitted:
+                if len(admitted) >= MAX_COOCCURRENCE_PAIRS:
+                    break
+                admitted.add(pair)
+    pair_sources = {pair: term_pages[pair[0]] & term_pages[pair[1]] for pair in admitted}
+    items = [{'kind': 'long_tail', 'term': term, 'frequency': frequency,
+              'sources': sorted(ngram_sources[term]),
+              'is_new': _normalized_keyword(term) not in covered}
+             for term, frequency in ngram_occurrences.items() if frequency >= MIN_NGRAM_OCCURRENCES]
+    items += [{'kind': 'co_occurrence', 'term': f'{first} + {second}', 'frequency': len(urls),
+               'sources': sorted(urls),
+               'is_new': _normalized_keyword(f'{first} + {second}') not in covered}
+              for (first, second), urls in pair_sources.items()
+              if len(urls) >= MIN_COOCCURRENCE_PAGES]
+    items += [{'kind': 'question', 'term': term, 'frequency': len(urls),
+               'sources': sorted(urls), 'is_new': _normalized_keyword(term) not in covered}
+              for term, urls in question_sources.items()]
+    items.sort(key=lambda item: (-item['frequency'], item['term'], item['kind']))
+    record = {'run_id': str(uuid4()), 'project_id': project_id,
+              'created_at': datetime.now(UTC).isoformat(),
+              'status': 'discovered' if valid else 'empty',
+              'result': {'extraction_run_id': extraction_run['run_id'],
+                         'project_keywords': project_keywords,
+                         'discovered': items[:limit], 'excluded': excluded}}
+    from seo_agent.store import save_run
+    save_run(record, store)
+    return record

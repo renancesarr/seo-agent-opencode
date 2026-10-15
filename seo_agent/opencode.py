@@ -19,10 +19,21 @@ Não use ferramentas, comandos, arquivos, formulários ou publicação.'''
 
 
 class OpenCodeGenerator:
-    def __init__(self, model, *, runner=None, timeout=300):
+    def __init__(self, model, *, runner=None, timeout=300, agent='seo-outline', prompt=PROMPT,
+                 title='SEO outline', description='Outline SEO sem ferramentas'):
         if not isinstance(model, str) or '/' not in model or not all(model.split('/', 1)):
             raise ValueError('Modelo deve usar provedor/modelo.')
         self.model, self.runner, self.timeout = model, runner or subprocess.run, timeout
+        self.agent, self.prompt = agent, prompt
+        self.title, self.description = title, description
+
+    def message(self, project, result):
+        evidence = [{'url': source['url'], 'page': source['page']} for source in result['sources']]
+        return (self.prompt + '\nSua resposta deve começar com { e terminar com }. '
+                'Sem introdução, markdown, bloco de código ou nota. '
+                'Não atribua à fonte temas que ela não contém; exponha insuficiência em pending.\n'
+                + json.dumps({'project': project, 'sources': evidence,
+                              'review_request': result.get('review_request')}, ensure_ascii=False))
 
     def __call__(self, project, result):
         result['generator'] = {'backend': 'opencode', 'model': self.model, 'tools': 'denied', 'status': 'started'}
@@ -38,15 +49,10 @@ class OpenCodeGenerator:
                 'name': model_id, 'limit': {'context': 8192, 'output': 2048}}
         config = {'model': self.model, 'share': 'disabled', 'autoupdate': False,
                   'permission': {'*': 'deny'},
-                  'agent': {'seo-outline': {'mode': 'primary', 'description': 'Outline SEO sem ferramentas',
-                           'prompt': PROMPT, 'permission': {'*': 'deny'}, 'temperature': 0.1}},
+                  'agent': {self.agent: {'mode': 'primary', 'description': self.description,
+                           'prompt': self.prompt, 'permission': {'*': 'deny'}, 'temperature': 0.1}},
                   'provider': {provider_id: provider} if provider else {}}
-        evidence = [{'url': source['url'], 'page': source['page']} for source in result['sources']]
-        message = (PROMPT + '\nSua resposta deve começar com { e terminar com }. '
-                   'Sem introdução, markdown, bloco de código ou nota. '
-                   'Não atribua à fonte temas que ela não contém; exponha insuficiência em pending.\n'
-                   + json.dumps({'project': project, 'sources': evidence,
-                                 'review_request': result.get('review_request')}, ensure_ascii=False))
+        message = self.message(project, result)
         with tempfile.TemporaryDirectory(prefix='seo-outline-') as directory:
             env = os.environ | {'XDG_CONFIG_HOME': directory, 'PWD': directory,
                                 'OPENCODE_CONFIG_CONTENT': json.dumps(config)}
@@ -55,7 +61,7 @@ class OpenCodeGenerator:
             env.pop('OPENCODE_CONFIG_DIR', None)
             try:
                 response = self.runner(['opencode', 'run', '--pure', '--dir', directory,
-                                        '--title', 'SEO outline', '--agent', 'seo-outline',
+                                        '--title', self.title, '--agent', self.agent,
                                         '--model', self.model, '--format', 'json'],
                                        input=message, text=True, capture_output=True, cwd=directory,
                                        env=env, timeout=self.timeout, check=False)

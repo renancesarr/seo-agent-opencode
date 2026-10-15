@@ -127,6 +127,46 @@ class PageExtraction(unittest.TestCase):
         self.assertEqual(page['structured_data'], [])
         self.assertEqual(page['text'], 'Como plantar Horta local')
 
+    def test_extracts_dates_and_authors_from_metadata_and_time_elements(self):
+        page = extract_page('''
+            <head>
+              <meta name="author" content=" Maria Silva ">
+              <meta property="article:published_time" content="2026-01-15T08:00:00+00:00">
+              <meta property="article:modified_time" content="2026-02-01T10:30:00+00:00">
+              <meta name="author" content="">
+            </head><body>
+              <time datetime=" 2026-01-15 ">15 de janeiro</time>
+              <div hidden><time datetime="2099-01-01">Oculto</time></div>
+            </body>
+        ''', 'https://example.org/')
+        self.assertEqual(page['authors'], [{'source': 'meta:author', 'value': 'Maria Silva'}])
+        self.assertEqual(page['dates'], [
+            {'source': 'meta:article:published_time', 'value': '2026-01-15T08:00:00+00:00'},
+            {'source': 'meta:article:modified_time', 'value': '2026-02-01T10:30:00+00:00'},
+            {'source': 'time', 'value': '2026-01-15'},
+        ])
+
+    def test_extracts_dates_and_authors_from_json_ld_including_graph(self):
+        page = extract_page('''
+            <head>
+              <script type="application/ld+json">{"@type":"Article",
+                "datePublished": "2026-03-01", "dateModified": "2026-03-02", "dateCreated": "2026-02-28",
+                "author": [{"@type": "Person", "name": " Maria Silva "}, "João Souza", {"@type": "Organization"}]}</script>
+              <script type="application/ld+json">{"@graph": [{"@type": "BlogPosting",
+                "datePublished": "2026-03-01", "author": {"name": "Ana Lima"}}]}</script>
+            </head>
+        ''', 'https://example.org/')
+        self.assertEqual(page['dates'], [
+            {'source': 'json_ld:datePublished', 'value': '2026-03-01'},
+            {'source': 'json_ld:dateModified', 'value': '2026-03-02'},
+            {'source': 'json_ld:dateCreated', 'value': '2026-02-28'},
+        ])
+        self.assertEqual(page['authors'], [
+            {'source': 'json_ld:author', 'value': 'Maria Silva'},
+            {'source': 'json_ld:author', 'value': 'João Souza'},
+            {'source': 'json_ld:author', 'value': 'Ana Lima'},
+        ])
+
     def test_reports_noindex_metadata_with_its_agent_scope(self):
         page = extract_page('''<head>
             <meta name="robots" content="NOINDEX, follow">

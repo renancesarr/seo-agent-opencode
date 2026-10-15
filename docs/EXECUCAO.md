@@ -78,6 +78,12 @@ quando seus critérios de aceite completos forem demonstrados.
 | [#17](https://github.com/renancesarr/seo-agent-opencode/issues/17) | Aceite operacional do MVP | #16 | T06 |
 | [#18](https://github.com/renancesarr/seo-agent-opencode/issues/18) | Captura DOM Kitesurf versus Chromium | — | B01 |
 | [#19](https://github.com/renancesarr/seo-agent-opencode/issues/19) | Busca Kitesurf e fallback | #18 | B01 |
+| [#24](https://github.com/renancesarr/seo-agent-opencode/issues/24) | Extração total e determinística das URLs coletadas | — | T07 |
+| [#25](https://github.com/renancesarr/seo-agent-opencode/issues/25) | Rede de conhecimento consultável offline | #24 | T07 |
+| [#26](https://github.com/renancesarr/seo-agent-opencode/issues/26) | Descoberta de palavras-chave com fonte | #24 | T07 |
+| [#27](https://github.com/renancesarr/seo-agent-opencode/issues/27) | Classificação de tipos por ML clássico | #24 | T07 |
+| [#28](https://github.com/renancesarr/seo-agent-opencode/issues/28) | Score de relevância por ML clássico | #24 | T07 |
+| [#29](https://github.com/renancesarr/seo-agent-opencode/issues/29) | Insights por LLM sobre a rede compacta | #25, #26, #27, #28 | T07 |
 
 Fronteira inicial: #10 e #18. Prioridade do produto: #10. B01 é experimental e
 não bloqueia o MVP. Os tickets não foram implementados nesta publicação.
@@ -331,6 +337,124 @@ Implementação local de #10–#16 em 13/10/2026, ainda sujeita a review cruzado
   `2026-10-13T18:10:00-03:00`, gravou falha `1f478977-2982-4805-b7dc-f45b6413c4e8`
   e conservou a proposta válida anterior no mesmo histórico. Configuração temporária,
   sem ativação permanente e sem credenciais Cloudflare.
+
+- Ticket #24 implementado na zcode-ai (spec #23, T07): comando `extract` com
+  condição de entrada (sem fontes → `no_sources` sem registrar nada), extração
+  determinística sem LLM das páginas preservadas (datas/autores de meta/time/
+  JSON-LD com origem por sinal), falhas por estágio (`page`, `structured_data`),
+  ausência ≠ erro e reexecução idêntica. Code review dois eixos: DDL/INSERT
+  unificado em helper de store; página vazia vira falha; docs atualizados.
+  Verificação: `python3 -m unittest discover -s tests -q` → 101 OK (1 skip),
+  sem rede/LLM. PR único da spec #23 para dev-ai ao concluir #24–#29.
+- Ticket #25 implementado na zcode-t25 (spec #23, T07): comandos `network
+  build`/`network query` derivam a rede de conhecimento da extração registrada
+  mais recente e a preservam como execução no mesmo store (padrão runs, sem
+  tabelas novas). Modelagem mínima: entidades `page`/`term` e relações
+  `has_term`/`links_to`, cada fato com `sources` (URLs do corpus). URL com
+  falha na extração fica fora com a falha em `excluded`; sem extração → erro
+  acionável apontando `extract`; sem fontes válidas → `status: empty`.
+  `query --compact` devolve contagens e principais termos/links com fontes,
+  menor que a soma do texto bruto (verificado com fixtures reais). Suíte:
+  `python -m unittest discover -s tests -q` → 110 OK (1 skip), sem rede/LLM.
+- Ticket #26 implementado na zcode-t26 (spec #23, T07): comando `keywords`
+  descobre palavras-chave sobre o texto preservado pela extração mais recente,
+  sem LLM e com Python stdlib: n-gramas de cauda longa (bi/trigramas com bordas
+  de conteúdo, lista mínima de stopwords pt-BR só de palavras gramaticais),
+  pares de termos coorrentes em >= 2 páginas (`a + b` alfabético) e perguntas
+  do texto (headings incluídos no texto preservado). Cada termo sai com
+  `sources` (URLs) e o registro referencia `extraction_run_id`; keywords do
+  projeto derivadas do snapshot mais recente marcam `is_new` por igualdade
+  normalizada. Condição de entrada igual ao `network build` (sem URLs → `run`;
+  com URLs sem extração → `extract`, nada registrado); falha parcial exclui a
+  URL com a falha em `excluded`; ordenação por frequência decrescente e
+  alfabética, `--limit` padrão 50; reexecução idêntica. Suíte:
+  `python -m unittest discover -s tests -q` → 124 OK (1 skip), sem rede/LLM.
+- Ticket #27 implementado na zcode-t27 (spec #23, T07): comando `classify`
+  rotula cada fonte da extração mais recente em `article`/`listing`/`profile`
+  por classificador linear de pontuação — ML clássico local, pesos fixos
+  auditáveis em `WEIGHTS`, determinístico sem semente — sobre indicadores dos
+  sinais já extraídos (prosa >= 300 palavras, >= 3 headings, autoria/datas,
+  >= 12 links, >= 50% do texto em âncoras, esparsidade, @type do JSON-LD);
+  vence a maior pontuação, empate em ordem alfabética. Cada rótulo sai com
+  `signals` (valores observados) e `scores` por tipo (justificativa
+  inspecionável); página sem texto ou sem indicador vira pendência
+  `unclassified` com motivo e status `partial`, não erro; condição de entrada,
+  `excluded` e `empty` iguais ao `network build`/`keywords`; registro via
+  save_run com `extraction_run_id`, saída ordenada por URL, reexecução
+  idêntica. Evidência do método: fixtures de tipo conhecido classificam
+  corretamente (guia 364 palavras/4 headings/BlogPosting → article 10;
+  diretório 15 links/razão de âncoras 0,91/ItemList → listing 8; ficha 29
+  palavras/Organization → profile 6). Suíte:
+  `python -m unittest discover -s tests -q` → 134 OK (1 skip), sem rede/LLM.
+- Ticket #28 implementado na zcode-t28 (spec #23, T07): comando `rank` pontua a
+  relevância de cada fonte e tema da extração mais recente com ranking linear
+  determinístico — ML clássico local, pesos fixos auditáveis em `WEIGHTS`
+  (autor 1, datas 1, texto >= 300 palavras 3, >= 3 headings 2, JSON-LD
+  presente 2, links recebidos 1 por página distinta do corpus com teto de 3),
+  sem aleatoriedade nem semente. O sinal de rede deriva do próprio conjunto
+  válido da extração (mesma semântica deduplicada de `links_to`), não da rede
+  persistida: `rank` roda logo após `extract`, sempre coerente com o
+  `extraction_run_id` pontuado. Cada fonte sai com `factors`
+  {signal, value, weight, points} cuja soma é o score; cada tema (heading
+  normalizado, critério de `term` da rede) soma os scores das fontes que o
+  cobrem com as URLs-fonte. Ordenações determinísticas (score decrescente,
+  depois alfabético); pendência explícita com motivo para fonte sem texto
+  (status `partial`, não erro); falha parcial em `excluded`; só falhas →
+  `empty`; reexecução idêntica. Evidência do método: fixtures de relevância
+  conhecida ranqueiam na ordem esperada (guia 364 palavras/4 headings/
+  BlogPosting/2 links recebidos → 11; ficha Organization com 1 link recebido
+  → 3; colega autor+data → 2; hub ItemList → 2 com empate desempatado por URL;
+  tema "pragas comuns" 13 = 11 + 2 agregando guia e colega). Suíte:
+  `python -m unittest discover -s tests -q` → 146 OK (1 skip), sem rede/LLM.
+- Ticket #29 implementado na zcode-t29 (spec #23, T07): comando `insights`
+  gera insights por LLM sobre o conhecimento compacto, reutilizando o
+  contrato de geração do `run` (gerador injetável na seam da CLI;
+  `--insights-file` controlado sem modelo; `--model` via OpenCode com
+  deny-all/--pure/JSON — `OpenCodeGenerator` parametrizado por
+  agente/prompt/título com `message` extraído, contrato do outline
+  inalterado). Payload = rede compacta + keywords/classify/rank da MESMA
+  extração da rede (época coerente; análises de outra extração não se
+  misturam), nunca page.text (invariante testado no payload recebido pelo
+  gerador e no prompt do model_runner). Anti-invenção adaptada do
+  validate_proposal: referências só páginas da rede, termos só da rede ou da
+  descoberta, observation exige âncora, rejeições registradas (status
+  `invalid_insights`, erro estágio `generation`) sem derrubar a execução.
+  Sem gerador: agregados entregues + `no_model` com mensagem explícita —
+  não é erro. Entrada: sem URLs → `run`; sem extração → `extract`; sem rede
+  → `network build`; rede vazia → reconstruir corpus; keywords/classify/rank
+  recomendadas — ausências viram pendências informadas em
+  `missing_analyses`. Persistência via save_run com extraction/network/
+  keywords/classify/rank run_ids (`null` quando ausentes). Smoke real em
+  processos separados: no_model entrega conhecimento; `--insights-file`
+  gera; histórico consultável. Suíte:
+  `python -m unittest discover -s tests -q` → 165 OK (1 skip), sem rede/LLM.
+
+- Correções do review do PR #30 (ai-codex, head 0c0ec47): (1) P1 — extract
+  lê apenas fontes de coleta preservadas (entradas com page/id); resultados
+  derivados como o ranking não substituem o conteúdo original — regressão do
+  ciclo run→extract→rank→extract→network build added; (2) P2 — coocorrência
+  em duas fases (candidatos = termos em >=2 páginas) com teto de 100.000
+  pares distintos; página única de 1.500 termos não materializa pares
+  (pico de memória < 80 MiB verificado por tracemalloc no teste).
+  Verificação: `python3 -m unittest discover -s tests -q` → 167 OK (1 skip).
+
+- Segunda rodada do review do PR #30 (ai-codex, head 7dc31e7): teto da
+  coocorrência separado da contagem — admissão limitada a 100 mil pares em
+  ordem determinística, e pares admitidos recebem frequência/fontes exatas
+  pela interseção do índice termo → páginas (par novo no teto não reduz os
+  admitidos; regressão com teto reduzido via patch cobre pares novos antes
+  de existentes em página posterior); `is_new` das coocorrências agora
+  compara normalizado dos dois lados (keyword 'Alface + Beterraba!' marca
+  'alface + beterraba' como não-nova). Verificação: suíte → 169 OK (1 skip).
+
+- Terceira rodada do review do PR #30 (ai-codex, 3 P2): (1) fragmento de
+  link desconsiderado na rede e no ranking — `pagina#secao` gera `links_to`
+  e voto de inbound para a página coletada (testes na rede e no rank);
+  (2) identificação de perguntas linear (split em vez de regex com
+  retrocesso — 60 mil caracteres sem pontuação em < 2 s, suíte do arquivo
+  caiu de ~8 s para ~1 s); (3) pergunta de heading extraída do próprio
+  heading, descartando a variante com prefixo de navegação/título do texto
+  corrido. Verificação: suíte → 173 OK (1 skip).
 
 Próximo passo operacional: publicar a configuração escolhida, ativar o
 monitoramento após integração aprovada e reproduzir o aceite
