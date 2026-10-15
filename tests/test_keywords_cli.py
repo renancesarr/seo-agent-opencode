@@ -259,6 +259,37 @@ class KeywordsCLI(unittest.TestCase):
             self.assertEqual(item['sources'], ['https://example.org/a', 'https://example.org/b'])
         self.assertFalse(any('aa' in item['term'] for item in co))
 
+    def test_question_identification_is_linear_on_unpunotiated_text(self):
+        import time
+        from seo_agent.__main__ import prepare_run
+        page = {'title': 'Texto corrido', 'text': 'x' * 60_000, 'headings': [], 'links': [],
+                'authors': [], 'dates': [], 'structured_data': []}
+        prepare_run(self.project, self.store, status='collected', result={'sources': [
+            {'id': 'fonte-corrido', 'url': 'https://example.org/corrido',
+             'retrieved_at': '2026-03-01T00:00:00+00:00', 'page': page}]})
+        self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        started = time.monotonic()
+        record = self.invoke('keywords', '--project-id', 'horta', '--store', str(self.store),
+                             '--limit', '1')
+        elapsed = time.monotonic() - started
+        self.assertEqual(record['result']['discovered'], [])
+        self.assertLess(elapsed, 2.0)
+
+    def test_question_heading_does_not_absorb_preceding_navigation_text(self):
+        from seo_agent.__main__ import prepare_run
+        from seo_agent.page import extract_page
+        html = ('<html><body><nav><a href="/">Guia Inicio</a></nav>'
+                '<h2>Como plantar?</h2><p>Resposta prática da página.</p></body></html>')
+        prepare_run(self.project, self.store, status='collected', result={'sources': [
+            {'id': 'fonte-pergunta', 'url': 'https://example.org/pergunta',
+             'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': extract_page(html, 'https://example.org/pergunta')}]})
+        self.invoke('extract', '--project-id', 'horta', '--store', str(self.store))
+        record = self.invoke('keywords', '--project-id', 'horta', '--store', str(self.store))
+        questions = [item['term'] for item in record['result']['discovered']
+                     if item['kind'] == 'question']
+        self.assertEqual(questions, ['como plantar'])
+
     def test_cooccurrence_against_registered_keyword_is_not_new(self):
         from seo_agent.__main__ import prepare_run
         self.project['keywords'] = ['Alface + Beterraba!']

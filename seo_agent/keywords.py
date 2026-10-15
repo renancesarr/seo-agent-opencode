@@ -17,7 +17,6 @@ MIN_COOCCURRENCE_PAGES = 2
 MAX_COOCCURRENCE_PAIRS = 100_000
 
 TOKEN_PATTERN = re.compile(r'[^\W_]+')
-QUESTION_PATTERN = re.compile(r'[^.!?]*\?')
 
 # Lista mínima em pt-BR, só palavras puramente gramaticais (artigos, preposições,
 # conjunções e cópulas): delimitam as bordas de conteúdo dos n-gramas e evitam que
@@ -37,8 +36,21 @@ def _normalized_keyword(text):
     return ' '.join(_tokens(text))
 
 
+def _question_segments(text):
+    """Segmentos terminados em "?", cortados no último "." ou "!" anterior.
+
+    Equivalente linear ao padrão `[^.!?]*\\?`: split em vez de regex evita o
+    retrocesso quadrático em textos longos sem pontuação.
+    """
+    segments = []
+    for part in (text or '').split('?')[:-1]:
+        cut = max(part.rfind('.'), part.rfind('!'))
+        segments.append(part[cut + 1:])
+    return segments
+
+
 def _question_terms(text):
-    return {_normalized_keyword(segment) for segment in QUESTION_PATTERN.findall(text or '')} - {''}
+    return {_normalized_keyword(segment) for segment in _question_segments(text)} - {''}
 
 
 def _ngrams(tokens):
@@ -82,9 +94,20 @@ def discover_keywords(project_id, runs, store, *, limit=DEFAULT_LIMIT):
             ngram_occurrences[term] += 1
             ngram_sources.setdefault(term, set()).add(url)
         page_contents[url] = {token for token in tokens if token not in STOPWORDS_PT_BR}
-        # O texto preservado já contém o texto dos headings, então perguntas de
-        # heading ("Como plantar?") aparecem aqui como qualquer segmento com "?".
-        for term in _question_terms(text):
+        # Perguntas vêm do texto e de cada heading isolado: o texto preservado
+        # concatena navegação e headings sem pontuação, então uma pergunta de
+        # heading ("Como plantar?") absorveria o texto anterior ("Guia Início
+        # Como plantar?"). O termo do heading vence: variantes do texto corrido
+        # que terminam nele são ruído e ficam de fora.
+        heading_questions = set()
+        for heading in (extraction.get('page') or {}).get('headings') or []:
+            heading_questions |= _question_terms(heading.get('text') or '')
+        questions = heading_questions | {
+            term for term in _question_terms(text)
+            if not any(term != question and term.endswith(' ' + question)
+                       for question in heading_questions)
+        }
+        for term in questions:
             question_sources.setdefault(term, set()).add(url)
     # Coocorrência em duas fases: um par só pode alcançar
     # MIN_COOCCURRENCE_PAGES páginas se cada termo já aparece em pelo menos

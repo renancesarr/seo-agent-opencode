@@ -155,6 +155,26 @@ class NetworkCLI(unittest.TestCase):
         runs = self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']
         self.assertEqual(runs[-1], record)
 
+    def test_link_with_fragment_creates_relation_to_the_collected_page(self):
+        from seo_agent.page import extract_page
+        html = ('<html><body><h1>Guia</h1><p>Veja os horários completos em outra página.</p>'
+                '<a href="https://example.org/plantar#horarios">Horários</a></body></html>')
+        sources = [
+            {'id': 'fonte-guia', 'url': 'https://example.org/guia',
+             'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': extract_page(html, 'https://example.org/guia')},
+            {'id': 'fonte-plantar', 'url': 'https://example.org/plantar',
+             'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': extract_page('<html><body><h1>Plantar</h1><p>Conteúdo.</p></body></html>',
+                                  'https://example.org/plantar')},
+        ]
+        self.record_extraction(sources)
+        record = self.invoke('network', 'build', '--project-id', 'horta', '--store', str(self.store))
+        relations = record['result']['network']['relations']
+        self.assertIn({'type': 'links_to', 'from': 'https://example.org/guia',
+                       'to': 'https://example.org/plantar', 'sources': ['https://example.org/guia']},
+                      relations)
+
     def test_rebuild_over_same_extraction_is_identical(self):
         self.record_extraction(self.extracted_sources())
         first = self.invoke('network', 'build', '--project-id', 'horta', '--store', str(self.store))

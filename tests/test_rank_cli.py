@@ -178,6 +178,27 @@ class RankCLI(unittest.TestCase):
         runs = self.invoke('history', '--project-id', 'horta', '--store', str(self.store))['runs']
         self.assertEqual(runs[-1], record)
 
+    def test_link_with_fragment_counts_as_inbound_vote(self):
+        from seo_agent.page import extract_page
+        html = ('<html><body><h1>Guia</h1><p>Veja os horários completos em outra página.</p>'
+                '<a href="https://example.org/hub#horarios">Horários</a></body></html>')
+        sources = [
+            {'id': 'fonte-guia', 'url': 'https://example.org/guia',
+             'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': extract_page(html, 'https://example.org/guia')},
+            {'id': 'fonte-hub', 'url': 'https://example.org/hub',
+             'retrieved_at': '2026-03-01T00:00:00+00:00',
+             'page': extract_page('<html><body><h1>Hub</h1><p>Conteúdo do hub.</p></body></html>',
+                                  'https://example.org/hub')},
+        ]
+        self.record_extraction(sources)
+        record = self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))
+        by_url = {item['url']: item for item in record['result']['sources']}
+        inbound = [factor for factor in by_url['https://example.org/hub']['factors']
+                   if factor['signal'] == 'inbound_links']
+        self.assertEqual(inbound[0]['value'], 1)
+        self.assertEqual(inbound[0]['points'], 1)
+
     def test_score_publishes_factors_with_values_and_weights(self):
         self.record_extraction(self.ranked_sources())
         record = self.invoke('rank', '--project-id', 'horta', '--store', str(self.store))

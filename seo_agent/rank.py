@@ -36,12 +36,13 @@ def _inbound_links(valid):
     Derivar do `valid` (em vez da rede persistida) mantém o score sempre coerente
     com a execução de extração pontuada e dispensa `network build` antes do rank.
     """
+    from urllib.parse import urldefrag
     corpus = {extraction['url'] for extraction in valid}
     voters = {url: set() for url in corpus}
     for extraction in valid:
         url = extraction['url']
         for link in (extraction.get('page') or {}).get('links') or []:
-            target = link.get('url')
+            target = urldefrag(link.get('url') or '')[0]
             if target in corpus and target != url:
                 voters[target].add(url)
     return {url: len(pages) for url, pages in voters.items()}

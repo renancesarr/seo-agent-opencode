@@ -447,6 +447,15 @@ Implementação local de #10–#16 em 13/10/2026, ainda sujeita a review cruzado
   compara normalizado dos dois lados (keyword 'Alface + Beterraba!' marca
   'alface + beterraba' como não-nova). Verificação: suíte → 169 OK (1 skip).
 
+- Terceira rodada do review do PR #30 (ai-codex, 3 P2): (1) fragmento de
+  link desconsiderado na rede e no ranking — `pagina#secao` gera `links_to`
+  e voto de inbound para a página coletada (testes na rede e no rank);
+  (2) identificação de perguntas linear (split em vez de regex com
+  retrocesso — 60 mil caracteres sem pontuação em < 2 s, suíte do arquivo
+  caiu de ~8 s para ~1 s); (3) pergunta de heading extraída do próprio
+  heading, descartando a variante com prefixo de navegação/título do texto
+  corrido. Verificação: suíte → 173 OK (1 skip).
+
 Próximo passo operacional: publicar a configuração escolhida, ativar o
 monitoramento após integração aprovada e reproduzir o aceite
 de #17; para #18, fornecer credenciais locais e hospedar fixtures controladas.

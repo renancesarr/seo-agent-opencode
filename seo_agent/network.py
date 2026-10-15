@@ -1,5 +1,7 @@
 """Rede de conhecimento das extrações, consultável offline com fonte por fato."""
 
+from urllib.parse import urldefrag
+
 from datetime import datetime, UTC
 from uuid import uuid4
 
@@ -9,6 +11,11 @@ NO_NETWORK_MESSAGE = ('Nenhuma rede registrada no histórico deste projeto; '
 
 COMPACT_TERMS_LIMIT = 20
 COMPACT_LINKS_LIMIT = 20
+
+
+def _page_target(url):
+    """Destino de um link sem o fragmento: `pagina#secao` aponta à página."""
+    return urldefrag(url or '')[0]
 
 
 def normalize_term(heading):
@@ -48,7 +55,7 @@ def build_network(project_id, runs, store):
             terms.setdefault(term, set()).add(url)
             relate({'type': 'has_term', 'from': url, 'to': term, 'sources': [url]})
         for link in page.get('links') or []:
-            target = link.get('url')
+            target = _page_target(link.get('url'))
             if target in pages and target != url:
                 relate({'type': 'links_to', 'from': url, 'to': target, 'sources': [url]})
     entities.extend({'type': 'term', 'id': term, 'sources': sorted(urls)}

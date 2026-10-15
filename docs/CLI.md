@@ -136,7 +136,7 @@ A modelagem é mínima e auditável: entidades `page` (a URL preservada, com
 minúsculas — os headings são os temas das páginas, por isso `term` cobre o
 papel de tema sem um terceiro tipo de entidade); relações `has_term`
 (página→termo) e `links_to` (página→página, apenas quando o destino também foi
-extraído). Toda entidade e relação carrega `sources` com as URLs do corpus que
+extraído; o fragmento do link é ignorado — `pagina#secao` aponta à página). Toda entidade e relação carrega `sources` com as URLs do corpus que
 a sustentam: nenhuma consulta devolve fato sem fonte. O registro da rede
 referencia `extraction_run_id`, a execução de extração da qual foi derivada —
 a proveniência vale por fato (URL) e por execução. Entidades e relações saem
@@ -182,9 +182,11 @@ sustenta — termo sem fonte no corpus não existe — e o registro referencia
   termo → páginas), então um par novo que encontre o teto nunca reduz as
   ocorrências dos pares já admitidos; apenas pares além do teto ficam de fora,
   o que garante trabalho limitado em corpora degenerados.
-- `question`: perguntas presentes no texto preservado (segmentos com "?"),
-  normalizadas sem o ponto de interrogação. O texto dos headings já faz parte
-  do texto preservado, então headings de pergunta também aparecem aqui.
+- `question`: perguntas presentes no texto preservado (segmentos com "?",
+  identificados em varredura linear, cortados no último "."/"!"), normalizadas
+  sem o ponto de interrogação. Perguntas de heading são extraídas do próprio
+  heading: o texto preservado concatena navegação e headings sem pontuação, e
+  a variante "com prefixo" que apareceria no texto corrido é descartada.
 
 Cada item sai com `kind`, `term`, `frequency`, `sources` (URLs) e `is_new`. O
 cruzamento com as palavras-chave originais do projeto — derivadas do snapshot
@@ -279,7 +281,8 @@ fatores:
 | `inbound_links` | por link recebido de página distinta do corpus, até 3 | 1 |
 
 O sinal de rede (`inbound_links`) é derivado da própria extração sendo pontuada
-— com a mesma semântica deduplicada das relações `links_to` da rede: cada
+— com a mesma semântica deduplicada das relações `links_to` da rede (inclusive
+o desconto de fragmentos: `pagina#secao` vota na página): cada
 página de origem conta um voto por destino, independentemente de quantas
 âncoras — em vez de consumir a rede persistida. Assim o `rank` funciona logo
 após `extract`, sempre coerente com a execução pontuada, sem exigir
